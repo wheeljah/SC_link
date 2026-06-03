@@ -38,6 +38,8 @@ jobs:
 
       - name: Build
         working-directory: ./client
+        env:
+          VITE_BASE_PATH: /SC_link/
         run: |
           npm run build
           find dist -name "*.map" -delete
