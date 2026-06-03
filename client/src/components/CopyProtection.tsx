@@ -40,6 +40,16 @@ export default function CopyProtection() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); return; }
     };
 
+    // DevTools 감지 — 열릴 때 경고
+    const checkDevTools = () => {
+      const threshold = 160;
+      setInterval(() => {
+        const w = window.outerWidth - window.innerWidth > threshold;
+        const h = window.outerHeight - window.innerHeight > threshold;
+        if (w || h) console.warn('Developer tools detected. This is not allowed.');
+      }, 1000);
+    };
+
     document.addEventListener('contextmenu', preventContextMenu);
     document.addEventListener('selectstart', preventSelect);
     document.addEventListener('keydown', preventCopy);
