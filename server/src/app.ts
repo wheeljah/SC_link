@@ -36,6 +36,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'https://wheeljah.github.io/SC_link',
+  'https://unmountable-bigamistically-harlee.ngrok-free.app',
 ];
 app.use(cors({
   origin: (origin, callback) => {
