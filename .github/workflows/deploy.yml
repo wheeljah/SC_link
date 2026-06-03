@@ -19,13 +19,13 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+- name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: './client/package-lock.json'
 
@@ -37,10 +37,7 @@ jobs:
         working-directory: ./client
         run: |
           npm run build
-          # Remove sourcemaps for production
           find dist -name "*.map" -delete
-        env:
-          VITE_BASE_PATH: /SC_link/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
