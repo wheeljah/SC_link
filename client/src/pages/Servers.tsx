@@ -28,13 +28,11 @@ export default function Servers() {
   const fetchServers = () =>
     api.get('/servers/status').then(r => setServers(r.data.data));
 
-  const fetchCredentials = () => {
-    if (!isLoggedIn) return;
+  const fetchCredentials = () =>
     api.get('/servers/credentials').then(r => setCredentials(r.data.data)).catch(() => {});
-  };
 
   useEffect(() => {
-    Promise.all([fetchServers(), fetchCredentials() || Promise.resolve()])
+    Promise.all([fetchServers(), fetchCredentials()])
       .finally(() => setLoading(false));
 
     const es = new EventSource('/api/v1/servers/sse');
