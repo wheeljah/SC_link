@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import axios from 'axios';
 
 let baseURL = '/api/v1'; // fallback: relative path (Vite proxy for localhost dev)
