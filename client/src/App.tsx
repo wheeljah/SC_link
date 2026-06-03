@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import TopAdBanner from './components/ads/TopAdBanner';
 import BottomAdBanner from './components/ads/BottomAdBanner';
+import CopyProtection from './components/CopyProtection';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -24,6 +25,7 @@ function Layout() {
     <>
       <TopAdBanner />
       <Navbar />
+      <CopyProtection />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
