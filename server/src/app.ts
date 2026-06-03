@@ -30,8 +30,23 @@ const PORT = parseInt(process.env.PORT || '4000');
 
 // 보안 미들웨어
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// CORS: allow localhost dev + GitHub Pages
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://wheeljah.github.io/SC_link',
+];
 app.use(cors({
-  origin: process.env.APP_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 

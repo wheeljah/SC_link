@@ -73,8 +73,21 @@ cd client && npm run dev
 
 ### 4. 접속
 
-- **프론트엔드**: http://localhost:5173
-- **API**: http://localhost:3000/api/v1
+- **프론트엔드 (로컬)**: http://localhost:5173
+- **API**: http://localhost:4000/api/v1
+
+---
+
+## GitHub Pages 배포
+
+프론트엔드는 GitHub Pages를 통해 외부에서 접근 가능합니다:
+
+1. **Settings → Pages → Source**: "GitHub Actions" 선택
+2. 자동으로 `master` 브랜치 push 시 Actions가 실행되어 배포됩니다
+3. **배포 주소**: https://wheeljah.github.io/SC_link
+
+> ⚠️ GitHub Pages는 **프론트엔드만** 호스팅합니다.
+> 백엔드 API는 로컬에서 실행 중이어야 합니다 (`http://localhost:4000`).
 
 ---
 
