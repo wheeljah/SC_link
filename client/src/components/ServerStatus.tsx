@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DownloadServer } from '../types';
-import api from '../services/api';
+import api, { getBackendOrigin, initPromise } from '../services/api';
 
 const STATUS_CONFIG = {
   ONLINE:   { dot: 'bg-green-500',  label: 'Online',    text: 'text-green-700'  },
@@ -16,17 +16,23 @@ export default function ServerStatus({ compact = false }: { compact?: boolean })
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/servers/status')
-      .then(res => setServers(res.data.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let es: EventSource | null = null;
 
-    // SSE로 실시간 업데이트
-    const es = new EventSource('/api/v1/servers/sse');
-    es.onmessage = (e) => {
-      try { setServers(JSON.parse(e.data)); } catch { /* noop */ }
-    };
-    return () => es.close();
+    // Wait for backend URL to be resolved before making requests
+    initPromise.then(() => {
+      api.get('/servers/status')
+        .then(res => setServers(res.data.data))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+
+      // SSE 실시간 업데이트 — use absolute backend URL
+      es = new EventSource(`${getBackendOrigin()}/api/v1/servers/sse`);
+      es.onmessage = (e) => {
+        try { setServers(JSON.parse(e.data)); } catch { /* noop */ }
+      };
+    });
+
+    return () => { if (es) es.close(); };
   }, []);
 
   if (loading) {
