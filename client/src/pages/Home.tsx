@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
+import AuthModal from '../components/AuthModal';
 import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
@@ -9,20 +10,12 @@ export default function Home() {
   const [progress, setProgress] = useState<{ step: string; message: string; percent: number } | null>(null);
   const [result, setResult] = useState<{ filePath: string; fileSize: number; doi: string } | null>(null);
   const [error, setError] = useState('');
-  const [loginPrompt, setLoginPrompt] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);   // 로그인 모달 표시 여부
   const { isLoggedIn } = useAuth();
-  const navigate = useNavigate();
 
-  const handleDownload = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 실제 다운로드 실행 (로그인 확인 후)
+  const doDownload = async () => {
     if (!input.trim()) return;
-
-    if (!isLoggedIn) {
-      setLoginPrompt(true);
-      return;
-    }
-
-    setLoginPrompt(false);
     setLoading(true);
     setError('');
     setResult(null);
@@ -70,6 +63,17 @@ export default function Home() {
     }
   };
 
+  // 폼 제출: 비로그인이면 로그인 모달, 로그인 상태면 바로 다운로드
+  const handleDownload = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    if (!isLoggedIn) {
+      setShowAuth(true);   // 작동 시도 → 로그인 창 표시
+      return;
+    }
+    doDownload();
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       {/* 히어로 섹션 */}
@@ -86,7 +90,7 @@ export default function Home() {
           <input
             type="text"
             value={input}
-            onChange={e => { setInput(e.target.value); setLoginPrompt(false); }}
+            onChange={e => setInput(e.target.value)}
             placeholder="DOI, PMID, arXiv ID, 또는 저널 URL 입력..."
             className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -103,32 +107,6 @@ export default function Home() {
           &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">PMID: 29988009</code>
           &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">arXiv:2103.14030</code>
         </p>
-
-        {/* 로그인 안내 — 비로그인 시 폼 아래에 표시 */}
-        {loginPrompt && !isLoggedIn && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-4">
-            <span className="text-2xl shrink-0">🔒</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">로그인 후 이용 가능합니다</p>
-              <p className="text-xs text-amber-600 mt-0.5">검색과 다운로드는 로그인 후 이용 가능합니다.</p>
-            </div>
-            <div className="shrink-0 flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => navigate('/login', { state: { from: '/' } })}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
-              >
-                로그인
-              </button>
-              <Link
-                to="/register"
-                className="text-xs text-center text-blue-600 hover:underline"
-              >
-                회원가입
-              </Link>
-            </div>
-          </div>
-        )}
 
         {/* 진행 상황 */}
         {progress && (
@@ -204,6 +182,14 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {/* 로그인 모달 — 작동 시도 시 표시. 로그인 성공하면 다운로드 자동 재개 */}
+      <AuthModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        onSuccess={() => { setShowAuth(false); doDownload(); }}
+        description="논문 검색·다운로드는 로그인 후 이용할 수 있습니다."
+      />
     </div>
   );
 }
