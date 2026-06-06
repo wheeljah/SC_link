@@ -603,8 +603,8 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
-export async function downloadPaper(doi: string, userId: number, maxRetries = 3): Promise<DownloadResult> {
-  // ─── Step 1: Try Unpaywall first (free, legal OA PDFs) ───────────────────
+export async function downloadPaper(doi: string, userId: number, maxRetries = 5): Promise<DownloadResult> {
+  // ─── Step 1: Unpaywall (무료·합법 OA) ────────────────────────────────────
   console.log(`[download] Trying Unpaywall OA for ${doi}...`);
   const unpaywallResult = await downloadFromUnpaywall(doi);
   if (unpaywallResult) {
@@ -612,14 +612,33 @@ export async function downloadPaper(doi: string, userId: number, maxRetries = 3)
     return unpaywallResult;
   }
 
-  // ─── Step 2: Try shadow library servers ───────────────────────────────────
+  // ─── Step 2: Sci-Hub.run API 우선 시도 (가장 빠르고 안정적) ──────────────
+  const { rows: runRows } = await pool.query(
+    `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
+  );
+  if (runRows.length > 0) {
+    console.log(`[download] Trying sci-hub.run API first...`);
+    const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
+    if (runResult) {
+      await pool.query(
+        `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
+        [runRows[0].id]
+      );
+      return runResult;
+    }
+  }
+
+  // ─── Step 3: 나머지 서버 순차 시도 ──────────────────────────────────────
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
+
+  // sci-hub.run 제외 (이미 위에서 시도)
+  const remaining = servers.filter(s => !s.url.includes('sci-hub.run'));
 
   const tried = new Set<number>();
 
   for (let i = 0; i < maxRetries; i++) {
-    const available = servers.filter(s => !tried.has(s.id));
+    const available = remaining.filter(s => !tried.has(s.id));
     if (available.length === 0) break;
 
     const server = pickServer(available);
@@ -632,21 +651,19 @@ export async function downloadPaper(doi: string, userId: number, maxRetries = 3)
     } else if (server.type === 'libgen') {
       result = await downloadFromLibGen(doi, server);
     } else if (server.type === 'archive') {
-      // Try Anna's Archive first, then Internet Archive
       result = await downloadFromAnnasArchive(doi, server);
-      if (!result) result = await downloadFromInternetArchive(doi, server);
     } else if (server.type === 'zlibrary') {
       result = await downloadFromZlibrary(doi, server, userId);
     }
 
     if (result) {
       await pool.query(
-        `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0) * 0.95 + 5) WHERE id = $1`,
+        `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
         [server.id]
       );
       return result;
     }
   }
 
-  throw new Error(`${maxRetries}번 시도했으나 PDF를 찾을 수 없습니다.`);
+  throw new Error('PDF를 찾을 수 없습니다. 잠시 후 다시 시도해주세요.');
 }

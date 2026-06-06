@@ -4,3 +4,17 @@ dist/
 .env.local
 .DS_Store
 *.log
+
+# 빌드 캐시
+*.tsbuildinfo
+
+# 업로드된 파일 (런타임 생성물)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# 배포 아티팩트 / 임시 파일
+*.zip
+_repo_body.json
+
+# Claude 작업 디렉토리
+.claude/

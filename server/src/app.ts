@@ -31,17 +31,31 @@ const PORT = parseInt(process.env.PORT || '4000');
 // 보안 미들웨어
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-// CORS: allow localhost dev + GitHub Pages
+// CORS: allow localhost dev + GitHub Pages + Render + ngrok
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://wheeljah.github.io/SC_link',
-  'https://unmountable-bigamistically-harlee.ngrok-free.app',
+  'https://wheeljah.github.io',        // GitHub Pages (origin은 호스트까지만)
 ];
+// 환경변수로 추가 origin 허용 (콤마 구분)
+if (process.env.APP_URL) {
+  try { allowedOrigins.push(new URL(process.env.APP_URL).origin); } catch { /* ignore */ }
+}
+if (process.env.CORS_EXTRA_ORIGINS) {
+  allowedOrigins.push(...process.env.CORS_EXTRA_ORIGINS.split(',').map(s => s.trim()));
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // origin 없음(curl/모바일) 허용, 화이트리스트 허용,
+    // *.onrender.com / *.ngrok-free.(app|dev) 패턴 허용
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      /\.onrender\.com$/.test(origin) ||
+      /\.ngrok-free\.(app|dev)$/.test(origin) ||
+      /\.github\.io$/.test(origin)
+    ) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked origin: ${origin}`);
@@ -69,8 +83,11 @@ app.use('/api/v1/papers', paperRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/ads', adRoutes);
 
-// 헬스체크
+// 헬스체크 (Render healthCheckPath + 슬립 방지 cron 대상)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+// 루트 — Render 슬립 방지 핑 및 동작 확인용
+app.get('/', (req, res) => res.json({ service: 'ScholarLink API', status: 'running' }));
 
 // 에러 핸들러
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

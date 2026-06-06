@@ -5,7 +5,8 @@
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "db:migrate": "node src/db/migrate.js"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate:prod": "node dist/db/migrate.js"
   },
   "dependencies": {
     "axios": "^1.7.7",
