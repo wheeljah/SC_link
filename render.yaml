@@ -13,10 +13,18 @@ services:
     plan: free          # 무료 웹서비스 (15분 미사용 시 슬립 → cron으로 방지)
     region: singapore   # 한국에서 가장 가까운 무료 리전
     rootDir: server
-    buildCommand: npm install && npm run build && npm run db:migrate:prod
-    startCommand: npm start
+    # devDependencies까지 설치(타입 정의 필요) → 빌드 → 마이그레이션은 start에서
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start:prod
     healthCheckPath: /api/health
     envVars:
+      # 빌드 시 devDependencies(@types/*) 설치 보장
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      # puppeteer Chromium 다운로드 스킵 (무료 512MB에서 불필요·용량과다)
+      - key: PUPPETEER_SKIP_DOWNLOAD
+        value: "true"
+
       # DB: Neon 연결문자열 직접 입력 (sync:false = 대시보드에서 수동 입력)
       # 예: postgresql://user:pass@ep-xxx.ap-southeast-1.aws.neon.tech/scholarlink?sslmode=require
       - key: DATABASE_URL

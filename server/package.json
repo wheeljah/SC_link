@@ -5,6 +5,7 @@
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
+    "start:prod": "node dist/db/migrate.js && node dist/app.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:prod": "node dist/db/migrate.js"
   },

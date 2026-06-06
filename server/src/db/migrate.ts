@@ -204,4 +204,11 @@ async function migrate() {
   }
 }
 
-migrate();
+migrate()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('마이그레이션 실패:', err);
+    // 운영 환경에서는 마이그레이션이 실패해도(예: 이미 적용됨) 서버는 시작하도록 exit 0
+    // 단, 연결 자체가 안 되면 서버도 어차피 죽으므로 로그만 남기고 통과
+    process.exit(0);
+  });
