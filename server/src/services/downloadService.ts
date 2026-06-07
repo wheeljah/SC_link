@@ -25,7 +25,11 @@ interface DownloadResult {
 // ─── Browser (Puppeteer) ──────────────────────────────────────────────────────
 let browserPromise: ReturnType<typeof import('puppeteer').default.launch> | null = null;
 
+// Render 등 Chrome 없는 환경에서 Puppeteer 시도 자체를 건너뜀
+const PUPPETEER_AVAILABLE = process.env.PUPPETEER_SKIP_DOWNLOAD !== 'true';
+
 async function getBrowser() {
+  if (!PUPPETEER_AVAILABLE) throw new Error('[puppeteer] Chrome 사용 불가 (PUPPETEER_SKIP_DOWNLOAD=true)');
   if (!browserPromise) {
     const puppeteer = await import('puppeteer');
     browserPromise = puppeteer.default.launch({
@@ -357,7 +361,7 @@ async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise
     browser = await getBrowser();
   } catch(e: unknown) {
     console.log(`[puppeteer] Browser launch failed: ${(e as Error).message}`);
-    throw e;
+    return null;
   }
   const page = await browser.newPage();
 
@@ -445,29 +449,33 @@ async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<Down
     const result = await downloadFileFromUrl(cloudscraperPdfUrl, doi, 'scidir_');
     if (result) return result;
 
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-    try {
-      await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      );
-      const resolvedUrl = cloudscraperPdfUrl.startsWith('http')
-        ? cloudscraperPdfUrl
-        : `${server.url}${cloudscraperPdfUrl}`;
-      await page.goto(resolvedUrl, { timeout: 30000 });
-      await page.waitForSelector('body', { timeout: 5000 }).catch(() => {});
-      const ct = await page.evaluate(() => document.contentType || '');
-      if (ct.includes('pdf') || resolvedUrl.endsWith('.pdf')) {
-        const filename = `scidir_${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-        const filePath = path.join(UPLOAD_DIR, filename);
-        const pdfBuffer = await page.pdf({ printBackground: true });
-        fs.writeFileSync(filePath, pdfBuffer);
-        const stat = fs.statSync(filePath);
-        if (stat.size > 5000) return { filePath: `/uploads/${filename}`, fileSize: stat.size };
-        fs.unlinkSync(filePath);
-      }
-    } catch { /* fall through */ }
-    finally { await page.close().catch(() => {}); }
+    if (PUPPETEER_AVAILABLE) {
+      try {
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+        try {
+          await page.setUserAgent(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          );
+          const resolvedUrl = cloudscraperPdfUrl.startsWith('http')
+            ? cloudscraperPdfUrl
+            : `${server.url}${cloudscraperPdfUrl}`;
+          await page.goto(resolvedUrl, { timeout: 30000 });
+          await page.waitForSelector('body', { timeout: 5000 }).catch(() => {});
+          const ct = await page.evaluate(() => document.contentType || '');
+          if (ct.includes('pdf') || resolvedUrl.endsWith('.pdf')) {
+            const filename = `scidir_${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+            const filePath = path.join(UPLOAD_DIR, filename);
+            const pdfBuffer = await page.pdf({ printBackground: true });
+            fs.writeFileSync(filePath, pdfBuffer);
+            const stat = fs.statSync(filePath);
+            if (stat.size > 5000) return { filePath: `/uploads/${filename}`, fileSize: stat.size };
+            fs.unlinkSync(filePath);
+          }
+        } catch { /* fall through */ }
+        finally { await page.close().catch(() => {}); }
+      } catch { /* Chrome 없음 — 건너뜀 */ }
+    }
   }
 
   const browserPdfUrl = await scrapeSciHubWithBrowser(doi, server);
