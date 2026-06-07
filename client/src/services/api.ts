@@ -52,10 +52,14 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Use Vite's BASE_URL so redirect works on both GitHub Pages (/SC_link/) and localhost (/)
-      window.location.href = (import.meta.env.BASE_URL || '/') + 'login';
+      const url = err.config?.url || '';
+      // 로그인/회원가입 요청 자체의 401은 리다이렉트 제외 — 화면에서 에러 메시지 표시
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = (import.meta.env.BASE_URL || '/') + 'login';
+      }
     }
     return Promise.reject(err);
   }
