@@ -186,38 +186,30 @@ ON CONFLICT DO NOTHING;
 INSERT INTO ad_banners (title, position, type, icon, message, cta_text, cta_url, advertiser_name, bg_color, text_color, priority) VALUES
   (
     'BidVibe 상단 배너', 'TOP', 'TEXT', NULL,
-    '🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료',
+    '수수료 없는 연구자-공급사 매칭 플랫폼 | 🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료',
     '지금 등록 →', 'https://ai-traffic.kr', '비드바이브(BidVibe)',
     '#0f172a', '#ffffff', 10
   ),
   (
     'BidVibe 하단 배너', 'BOTTOM', 'IMAGE_TEXT', NULL,
-    '요청하면 견적이 다~ 온다 — 연구실 시약/장비, 비공개 경쟁 견적을 받아보세요!',
+    '요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼',
     '무료로 시작하기', 'https://ai-traffic.kr', 'BidVibe',
     '#ffffff', '#0f172a', 10
   )
 ON CONFLICT DO NOTHING;
+
+-- 배너 문구 최신화 (서버 재시작 시마다 현재 문구로 갱신)
+UPDATE ad_banners
+SET message = '수수료 없는 연구자-공급사 매칭 플랫폼 | 🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료'
+WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)';
+
+UPDATE ad_banners
+SET message = '요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼'
+WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe';
 `;
 
 async function migrate() {
   const client = await pool.connect();
   try {
     await client.query(SQL);
-    console.log('✅ DB 마이그레이션 완료');
-  } catch (err) {
-    console.error('❌ 마이그레이션 오류:', err);
-    throw err;
-  } finally {
-    client.release();
-    await pool.end();
-  }
-}
-
-migrate()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error('마이그레이션 실패:', err);
-    // 운영 환경에서는 마이그레이션이 실패해도(예: 이미 적용됨) 서버는 시작하도록 exit 0
-    // 단, 연결 자체가 안 되면 서버도 어차피 죽으므로 로그만 남기고 통과
-    process.exit(0);
-  });
+    co

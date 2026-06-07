@@ -29,7 +29,7 @@ async function getBrowser() {
   if (!browserPromise) {
     const puppeteer = await import('puppeteer');
     browserPromise = puppeteer.default.launch({
-      executablePath: process.env.CHROME_PATH || 'google-chrome-stable',
+      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       headless: true,
       args: [
         '--no-sandbox',
@@ -48,22 +48,26 @@ async function getBrowser() {
 
 // ─── File download helper ────────────────────────────────────────────────────
 
+/** Verify PDF URL is accessible (HEAD check) before attempting full download */
 async function checkPdfAccessible(pdfUrl: string): Promise<boolean> {
   try {
     const head = await axios.head(pdfUrl, { timeout: 15000, maxRedirects: 5 });
     const ct = String(head.headers['content-type'] || '');
     const size = head.headers['content-length'];
+    // Accept if content-type is pdf OR if we got a non-403 status with a size
     return (ct.includes('pdf') || !!size) && head.status === 200;
   } catch (e) {
     if (axios.isAxiosError(e) && (e.response?.status === 403 || e.response?.status === 401)) {
-      return false;
+      return false; // Explicitly blocked — don't waste time downloading
     }
+    // DNS error, timeout etc. — try anyway (might work via browser)
     return true;
   }
 }
 
 async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Promise<DownloadResult | null> {
   try {
+    // Quick HEAD check first — reject 403s early
     const accessible = await checkPdfAccessible(pdfUrl);
     if (!accessible) {
       console.log(`[download] PDF URL not accessible (403/blocked): ${pdfUrl}`);
@@ -88,6 +92,7 @@ async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Pr
 
     const stat = fs.statSync(filePath);
     if (stat.size < 5000) {
+      // Probably an error page — discard
       fs.unlinkSync(filePath);
       return null;
     }
@@ -116,143 +121,8 @@ async function getUserCredential(userId: number, serverId: number): Promise<{ lo
   }
 }
 
-// ─── OA: Semantic Scholar ─────────────────────────────────────────────────────
-async function downloadFromSemanticScholar(doi: string): Promise<DownloadResult | null> {
-  try {
-    const res = await axios.get(
-      `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(doi)}`,
-      {
-        params: { fields: 'openAccessPdf,title' },
-        timeout: 10000,
-        headers: { 'User-Agent': 'ScholarLink/1.0 (research tool)' },
-      }
-    );
-    const pdfUrl: string | undefined = res.data?.openAccessPdf?.url;
-    if (!pdfUrl) {
-      console.log(`[s2] No OA PDF for ${doi}`);
-      return null;
-    }
-    console.log(`[s2] OA PDF: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 's2_');
-  } catch (e) {
-    if (axios.isAxiosError(e)) console.log(`[s2] ${e.response?.status} ${e.message}`);
-    return null;
-  }
-}
-
-// ─── OA: Europe PMC ───────────────────────────────────────────────────────────
-async function downloadFromEuropePMC(doi: string): Promise<DownloadResult | null> {
-  try {
-    // Step 1: search by DOI
-    const searchRes = await axios.get(
-      'https://www.ebi.ac.uk/europepmc/webservices/rest/search',
-      {
-        params: {
-          query: `DOI:${doi}`,
-          resultType: 'lite',
-          format: 'json',
-          pageSize: 1,
-        },
-        timeout: 10000,
-      }
-    );
-    const results = searchRes.data?.resultList?.result;
-    if (!results?.length) return null;
-
-    const article = results[0];
-    const pmcId: string | undefined = article.pmcid;
-    const isOA: boolean = article.isOpenAccess === 'Y';
-
-    if (!isOA || !pmcId) {
-      console.log(`[europepmc] ${doi}: not OA or no PMCID`);
-      return null;
-    }
-
-    // Step 2: get PDF via PMC render endpoint
-    const pdfUrl = `https://europepmc.org/backend/ptpmcrender.fcgi?accid=${pmcId}&blobtype=pdf`;
-    console.log(`[europepmc] ${doi} → ${pmcId}: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 'epmc_');
-  } catch (e) {
-    if (axios.isAxiosError(e)) console.log(`[europepmc] ${e.response?.status} ${e.message}`);
-    return null;
-  }
-}
-
-// ─── OA: PubMed Central ───────────────────────────────────────────────────────
-async function downloadFromPMC(doi: string): Promise<DownloadResult | null> {
-  try {
-    // Step 1: DOI → PMCID via ID converter
-    const idRes = await axios.get(
-      'https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/',
-      {
-        params: { ids: doi, format: 'json', idtype: 'doi' },
-        timeout: 10000,
-      }
-    );
-    const record = idRes.data?.records?.[0];
-    const pmcid: string | undefined = record?.pmcid;
-    if (!pmcid) {
-      console.log(`[pmc] No PMCID for ${doi}`);
-      return null;
-    }
-
-    // Step 2: get OA download links
-    const oaRes = await axios.get(
-      'https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi',
-      {
-        params: { id: pmcid, format: 'json' },
-        timeout: 10000,
-      }
-    );
-    const links: Array<{ href: string; format: string }> = oaRes.data?.records?.[0]?.links ?? [];
-    const pdfLink = links.find(l => l.format === 'pdf')?.href;
-    if (!pdfLink) {
-      console.log(`[pmc] No PDF link for ${pmcid}`);
-      return null;
-    }
-
-    // Step 3: download (FTP URL → convert to HTTPS)
-    const pdfUrl = pdfLink.replace(/^ftp:/, 'https:');
-    console.log(`[pmc] ${doi} → ${pmcid}: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 'pmc_');
-  } catch (e) {
-    if (axios.isAxiosError(e)) console.log(`[pmc] ${e.response?.status} ${e.message}`);
-    return null;
-  }
-}
-
-// ─── OA: CORE API ─────────────────────────────────────────────────────────────
-async function downloadFromCORE(doi: string): Promise<DownloadResult | null> {
-  const apiKey = process.env.CORE_API_KEY;
-  if (!apiKey) {
-    console.log('[core] CORE_API_KEY not set, skipping');
-    return null;
-  }
-  try {
-    const res = await axios.get(
-      'https://api.core.ac.uk/v3/search/works',
-      {
-        params: { q: `doi:${doi}`, limit: 1, api_key: apiKey },
-        timeout: 10000,
-      }
-    );
-    const work = res.data?.results?.[0];
-    if (!work) return null;
-
-    const pdfUrl: string | undefined = work.downloadUrl || work.fullTextUrl;
-    if (!pdfUrl) {
-      console.log(`[core] No PDF URL for ${doi}`);
-      return null;
-    }
-    console.log(`[core] PDF: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 'core_');
-  } catch (e) {
-    if (axios.isAxiosError(e)) console.log(`[core] ${e.response?.status} ${e.message}`);
-    return null;
-  }
-}
-
 // ─── Sci-Hub.run (FastAPI backend) ───────────────────────────────────────────
+/** Special API-based Sci-Hub.run that uses a FastAPI backend at fast.wbleb.com */
 async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
   console.log(`[scihub.run] Called for DOI=${doi}`);
   const API_BASE = 'https://fast.wbleb.com';
@@ -266,25 +136,45 @@ async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<D
   };
 
   try {
+    // Step 1: Query the API
     const apiRes = await axios.get(`${API_BASE}/api/v1/paper/${encodeURIComponent(doi)}`, {
       timeout: 8000,
       headers,
     });
-    const data = apiRes.data;
-    if (!data.success) return null;
 
+    const data = apiRes.data;
+
+    if (!data.success) {
+      // Paper not in database
+      return null;
+    }
+
+    // Step 2: Construct PDF URL
+    // The backend returns either an absolute URL or a relative path like "/papers/xxx.pdf"
     const pdfPath: string = data.url;
-    const pdfUrl = pdfPath.startsWith('http') ? pdfPath : `${API_BASE}${pdfPath}`;
+    const pdfUrl = pdfPath.startsWith('http')
+      ? pdfPath
+      : `${API_BASE}${pdfPath}`;
+
+    // Step 3: Download the PDF
     const result = await downloadFileFromUrl(pdfUrl, doi, 'shr_');
+
     if (result) {
-      console.log(`[scihub.run] Downloaded: ${doi} (cached=${data.cached})`);
+      console.log(`[scihub.run] Downloaded: ${doi} → ${pdfPath} (cached=${data.cached})`);
       return result;
     }
+
     return null;
   } catch (e) {
     if (axios.isAxiosError(e)) {
-      if (e.response?.status === 404) { console.log(`[scihub.run] Not found: ${doi}`); return null; }
-      console.log(`[scihub.run] ${e.response?.status} ${e.message}`);
+      if (e.response?.status === 404) {
+        // Paper not found in database — try next server
+        console.log(`[scihub.run] Paper not found: ${doi}`);
+        return null;
+      }
+      console.log(`[scihub.run] API error: ${e.response?.status} ${e.message}`);
+    } else {
+      console.log(`[scihub.run] Error: ${(e as Error).message}`);
     }
     return null;
   }
@@ -292,9 +182,12 @@ async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<D
 
 // ─── Sci-Hub (cloudscraper → cheerio) ───────────────────────────────────────
 
+/** Error thrown when cloudscraper hits a protection page (DDoS-Guard / Cloudflare) */
 class ScrapeBlockedError extends Error {
   constructor(message: string) { super(message); this.name = 'ScrapeBlockedError'; }
 }
+
+/** Error thrown when the Sci-Hub page shows "login required" — paper not in Sci-Hub DB */
 class SciHubNotAvailableError extends Error {
   constructor(message: string) { super(message); this.name = 'SciHubNotAvailableError'; }
 }
@@ -304,6 +197,7 @@ async function scrapeSciHubPage(doi: string, server: ServerInfo): Promise<string
     const pageUrl = `${server.url}/${doi}`;
     const pageHtml = await cloudscraper.get(pageUrl) as string;
 
+    // Detect DDoS-Guard / Cloudflare protection pages
     if (
       pageHtml.includes('DDoS-Guard') ||
       pageHtml.includes('Cloudflare') ||
@@ -313,6 +207,8 @@ async function scrapeSciHubPage(doi: string, server: ServerInfo): Promise<string
       throw new ScrapeBlockedError(`Protection page from ${server.name}: ${pageUrl}`);
     }
 
+    // Detect "login required / not available" pages — paper is not in Sci-Hub DB
+    // These pages show article metadata but no PDF download link
     const notAvailablePatterns = [
       'Log in to access this article',
       'The article reader is available to registered users',
@@ -322,42 +218,56 @@ async function scrapeSciHubPage(doi: string, server: ServerInfo): Promise<string
     ];
     for (const pattern of notAvailablePatterns) {
       if (pageHtml.includes(pattern)) {
-        throw new SciHubNotAvailableError(`Paper not available on ${server.name}: ${pattern}`);
+        throw new SciHubNotAvailableError(`Paper not available on Sci-Hub (${server.name}): ${pattern}`);
       }
     }
 
     const $ = cheerio.load(pageHtml);
 
+    // Try embedded PDF viewer
     const embedSrc = $('embed[type="application/pdf"]').attr('src') ||
                      $('iframe').filter('[src*="pdf"], [src*="viewer"]').attr('src');
     if (embedSrc) return embedSrc.startsWith('http') ? embedSrc : `${server.url}${embedSrc}`;
 
+    // Try direct PDF links
     const pdfHref = $('a[href$=".pdf"]').first().attr('href') ||
                     $('a[href*=".pdf?"]').first().attr('href') ||
                     $('button[onclick*=".pdf"]').first().attr('onclick')?.match(/['"]([^'"]*\.pdf[^'"]*)['"]/)?.[1];
     if (pdfHref) return pdfHref.startsWith('http') ? pdfHref : `${server.url}${pdfHref}`;
 
-    const dataPdf = $('[data-pdf]').first().attr('data-pdf') ||
-                    $('[data-src*="pdf"]').first().attr('data-src') ||
-                    $('[data-url*="pdf"]').first().attr('data-url');
+    // Try data-* attributes holding PDF URLs
+    const dataPdf = $('[data-pdf], [data-src*="pdf"], [data-url*="pdf"]').first()
+      .attr('data-pdf') || $('[data-pdf], [data-src*="pdf"], [data-url*="pdf"]').first().attr('data-src') ||
+      $('[data-pdf], [data-src*="pdf"], [data-url*="pdf"]').first().attr('data-url');
     if (dataPdf) return dataPdf.startsWith('http') ? dataPdf : `${server.url}${dataPdf}`;
+
+    // Try clicking download buttons via text
+    const downloadBtn = $('a:contains("Download"), a:contains("download"), button:contains("Download")').first();
+    if (downloadBtn.length > 0) {
+      const onclick = downloadBtn.attr('onclick') || '';
+      const match = onclick.match(/['"]([^'"]*\.pdf[^'"]*)['"]/) || onclick.match(/src[:=]\s*['"]([^'"]+)['"]/);
+      if (match) return match[1].startsWith('http') ? match[1] : `${server.url}${match[1]}`;
+    }
 
     return null;
   } catch (e) {
+    // Re-throw protection errors so the caller can retry with Puppeteer
     if (e instanceof ScrapeBlockedError) throw e;
     if (e instanceof SciHubNotAvailableError) throw e;
     return null;
   }
 }
 
+// ─── Sci-Hub (Puppeteer — Cloudflare / dynamic JS) ──────────────────────────
 async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise<string | null> {
   console.log(`[puppeteer] Scraping ${doi} via ${server.name}...`);
   let browser;
   try {
     browser = await getBrowser();
-  } catch(e: unknown) {
-    console.log(`[puppeteer] Browser launch failed: ${(e as Error).message}`);
-    throw e;
+    console.log(`[puppeteer] Browser OK`);
+  } catch(e: any) {
+    console.log(`[puppeteer] Browser launch failed: ${e.message}`);
+    throw e; // propagate so downloadFromSciHub can try next server
   }
   const page = await browser.newPage();
 
@@ -367,29 +277,38 @@ async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise
     );
 
     const pageUrl = `${server.url}/${doi}`;
+    console.log(`[puppeteer] Navigating to ${pageUrl}...`);
     try {
       await page.goto(pageUrl, { waitUntil: 'load', timeout: 20000 });
-    } catch(e: unknown) {
-      console.log(`[puppeteer] goto failed: ${(e as Error).message.substring(0, 200)}`);
+    } catch(e: any) {
+      console.log(`[puppeteer] page.goto failed: ${e.message.substring(0, 200)}`);
+      // Don't throw — fall through to returning null
       return null;
     }
+    console.log(`[puppeteer] Page loaded, URL: ${page.url()}`);
 
+    // Wait for PDF viewer or download button
     await page.waitForSelector('embed[type="application/pdf"], iframe[src*="pdf"], a[href$=".pdf"], [class*="download"]', {
       timeout: 15000,
-    }).catch(() => {});
+    }).catch(() => {/* continue anyway */});
 
+    // Collect all candidate URLs
     const candidates: string[] = [];
 
+    // iframes / embeds
     const embeds = await page.$$eval('embed[src], iframe[src]', (els: (Element & { src?: string })[]) =>
       els.map(e => e.src || '')
     );
     candidates.push(...embeds);
 
+    // direct PDF links
     const links = await page.$$eval('a[href]', (els: (HTMLAnchorElement & { href?: string })[]) =>
-      els.filter(e => (e.href || '').toLowerCase().includes('.pdf')).map(e => e.href || '')
+      els.filter(e => (e.href || '').toLowerCase().includes('.pdf'))
+        .map(e => e.href || '')
     );
     candidates.push(...links);
 
+    // buttons with onclick PDF refs
     const btnCandidates = await page.$$eval('button, a', (els: Element[]) =>
       els.flatMap(e => {
         const el = e as HTMLElement;
@@ -407,10 +326,13 @@ async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise
         const resolved = candidate.startsWith('//') ? `https:${candidate}` :
                          candidate.startsWith('/') ? `${server.url}${candidate}` :
                          candidate;
+        // Quick HEAD check
         try {
           const head = await axios.head(resolved, { timeout: 8000, maxRedirects: 3 });
           const ct = String(head.headers['content-type'] || '');
-          if (ct.includes('pdf') || head.headers['content-length']) return resolved;
+          if (ct.includes('pdf') || head.headers['content-length']) {
+            return resolved;
+          }
         } catch { /* try next */ }
       }
     }
@@ -422,18 +344,24 @@ async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise
   }
 }
 
+// ─── Sci-Hub master downloader ────────────────────────────────────────────────
 async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
-  if (server.url.includes('sci-hub.run')) return await downloadFromSciHubRun(doi, server);
-
+  // Sci-Hub.run uses a FastAPI backend — different mechanism from traditional HTML scraping
+  if (server.url.includes('sci-hub.run')) {
+    return await downloadFromSciHubRun(doi, server);
+  }
   let cloudscraperPdfUrl: string | null = null;
 
+  // 1. Try cloudscraper first (fast, no browser overhead)
   try {
     cloudscraperPdfUrl = await scrapeSciHubPage(doi, server);
   } catch (e) {
     if (e instanceof ScrapeBlockedError) {
       console.log(`[scihub] cloudscraper blocked on ${server.name}, falling back to Puppeteer...`);
+      // Skip cloudscraper entirely — go straight to Puppeteer
       cloudscraperPdfUrl = null;
     } else if (e instanceof SciHubNotAvailableError) {
+      // Paper not in Sci-Hub DB — skip Puppeteer too and try next server immediately
       console.log(`[scihub] ${server.name}: ${e.message}`);
       return null;
     } else {
@@ -445,6 +373,8 @@ async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<Down
     const result = await downloadFileFromUrl(cloudscraperPdfUrl, doi, 'scidir_');
     if (result) return result;
 
+    // cloudscraper found the PDF URL but direct download was blocked (e.g. 403 DDoS-Guard).
+    // Try Puppeteer with the known URL — browser session may bypass the block.
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
@@ -463,13 +393,20 @@ async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<Down
         const pdfBuffer = await page.pdf({ printBackground: true });
         fs.writeFileSync(filePath, pdfBuffer);
         const stat = fs.statSync(filePath);
-        if (stat.size > 5000) return { filePath: `/uploads/${filename}`, fileSize: stat.size };
+        if (stat.size > 5000) {
+          return { filePath: `/uploads/${filename}`, fileSize: stat.size };
+        }
         fs.unlinkSync(filePath);
       }
-    } catch { /* fall through */ }
-    finally { await page.close().catch(() => {}); }
+    } catch {
+      // Puppeteer approach also failed — fall through to next step
+    } finally {
+      await page.close().catch(() => {});
+    }
   }
 
+  // 2. Fallback to Puppeteer page scraping (handles Cloudflare on the search page)
+  // Skip if cloudscraper found a "login required" page — paper not in Sci-Hub DB at all
   const browserPdfUrl = await scrapeSciHubWithBrowser(doi, server);
   if (browserPdfUrl) {
     const result = await downloadFileFromUrl(browserPdfUrl, doi, 'scidir_');
@@ -483,45 +420,21 @@ async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<Down
 async function downloadFromLibGen(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
   try {
     let searchUrl: string;
-    // libgen.rs / libgen.st / libgen.is use /scimag endpoint
-    if (server.url.includes('scimag') || server.url.match(/libgen\.(rs|st|is|li|la|gl|bz|vg)/)) {
-      const base = server.url.replace(/\/scimag.*$/, '');
-      searchUrl = `${base}/scimag/?req=${encodeURIComponent(doi)}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def`;
+    if (server.url.includes('scimag')) {
+      searchUrl = `${server.url}?req=${encodeURIComponent(doi)}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def`;
     } else {
       searchUrl = `${server.url}?s=${encodeURIComponent(doi)}`;
     }
 
     const res = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(res);
 
+    const $ = cheerio.load(res as string);
     let pdfLink = $('a[href*=".pdf"]').first().attr('href');
     if (!pdfLink) pdfLink = $('a[href*="/get"]').first().attr('href');
     if (!pdfLink) pdfLink = $('tr td a[href*="download"]').first().attr('href');
-    if (!pdfLink) {
-      // library.lol style: direct download link in table
-      $('td a[href^="http"]').each((_: number, el: unknown) => {
-        if (pdfLink) return false; // break
-        const href = $(el as Parameters<typeof $>[0]).attr('href') || '';
-        if (href.includes('library.lol') || href.includes('libgen') || href.endsWith('.pdf')) {
-          pdfLink = href;
-        }
-      });
-    }
     if (!pdfLink) return null;
 
     const fullUrl = pdfLink.startsWith('http') ? pdfLink : `${server.url}${pdfLink}`;
-
-    // library.lol returns an intermediate download page — follow it
-    if (fullUrl.includes('library.lol') || fullUrl.includes('get.php')) {
-      const dlPage = await cloudscraper.get(fullUrl) as string;
-      const $dl = cheerio.load(dlPage);
-      const directLink = $dl('a[href*=".pdf"]').first().attr('href') ||
-                         $dl('h2 a').first().attr('href');
-      if (directLink) return await downloadFileFromUrl(
-        directLink.startsWith('http') ? directLink : `${fullUrl}${directLink}`, doi, 'libgen_'
-      );
-    }
-
     return await downloadFileFromUrl(fullUrl, doi, 'libgen_');
   } catch {
     return null;
@@ -533,15 +446,15 @@ async function downloadFromAnnasArchive(doi: string, _server: ServerInfo): Promi
   try {
     const searchUrl = `https://annas-archive.org/search?q=${encodeURIComponent(doi)}&content_type=pdf`;
     const pageHtml = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(pageHtml);
 
+    const $ = cheerio.load(pageHtml);
     const firstResult = $('a[href*="/md5/"]').first().attr('href');
     if (!firstResult) return null;
 
     const md5PageUrl = `https://annas-archive.org${firstResult}`;
     const md5Html = await cloudscraper.get(md5PageUrl) as string;
-    const $$ = cheerio.load(md5Html);
 
+    const $$ = cheerio.load(md5Html);
     let dlLink = $$('a[href*="/download/"]').first().attr('href');
     if (!dlLink) dlLink = $$('a[href*=".pdf"]').first().attr('href');
     if (!dlLink) return null;
@@ -562,16 +475,16 @@ async function downloadFromZlibrary(doi: string, server: ServerInfo, userId: num
     const base = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
     const searchUrl = `${base}/search?q=${encodeURIComponent(doi)}`;
     const pageHtml = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(pageHtml);
 
+    const $ = cheerio.load(pageHtml);
     const firstLink = $('a[href*="/book/"]').first().attr('href');
     if (!firstLink) return null;
 
     const bookPageUrl = firstLink.startsWith('http') ? firstLink : `${server.url}${firstLink}`;
     const bookHtml = await cloudscraper.get(bookPageUrl) as string;
-    const $$ = cheerio.load(bookHtml);
 
-    const dlBtn = $$('a[href*="/download/"]').first().attr('href');
+    const $$ = cheerio.load(bookHtml);
+    let dlBtn = $$('a[href*="/download/"]').first().attr('href');
     if (!dlBtn) return null;
 
     const dlUrl = dlBtn.startsWith('http') ? dlBtn : `${server.url}${dlBtn}`;
@@ -582,35 +495,60 @@ async function downloadFromZlibrary(doi: string, server: ServerInfo, userId: num
 }
 
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
+/** Query Unpaywall API for free OA PDF. Called FIRST before any shadow library. */
 async function downloadFromUnpaywall(doi: string): Promise<DownloadResult | null> {
   const email = process.env.UNPAYWALL_EMAIL;
-  if (!email) { console.log('[unpaywall] UNPAYWALL_EMAIL not set. Skipping.'); return null; }
+
+  // Skip if not configured
+  if (!email) {
+    console.log(`[unpaywall] Not configured (set UNPAYWALL_EMAIL env var). Skipping.`);
+    return null;
+  }
 
   try {
     const res = await axios.get(
       `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}`,
-      { timeout: 15000, params: { email } }
+      {
+        timeout: 15000,
+        params: { email },
+      }
     );
-    const data = res.data;
-    if (!data.is_oa) { console.log(`[unpaywall] ${doi}: not OA`); return null; }
 
+    const data = res.data;
+
+    // Not OA at all
+    if (!data.is_oa) {
+      console.log(`[unpaywall] ${doi}: not OA`);
+      return null;
+    }
+
+    // Try best PDF location first
     const bestPdfUrl = data.best_oa_location?.url_for_pdf;
     if (bestPdfUrl) {
-      console.log(`[unpaywall] OA PDF: ${bestPdfUrl}`);
+      console.log(`[unpaywall] ${doi}: OA PDF found at ${bestPdfUrl}`);
       const result = await downloadFileFromUrl(bestPdfUrl, doi, 'unpaywall_');
       if (result) return result;
     }
 
+    // Fall back to best OA location (may not be PDF but try anyway)
     const bestUrl = data.best_oa_location?.url;
     if (bestUrl) {
+      console.log(`[unpaywall] ${doi}: OA location (non-PDF) at ${bestUrl}`);
       const result = await downloadFileFromUrl(bestUrl, doi, 'unpaywall_');
       if (result) return result;
     }
+
     return null;
   } catch (e) {
     if (axios.isAxiosError(e)) {
-      if (e.response?.status === 422) { console.log('[unpaywall] Invalid email. Skipping.'); return null; }
-      console.log(`[unpaywall] ${e.response?.status} ${e.message}`);
+      // 422 = fake email → silently skip
+      if (e.response?.status === 422) {
+        console.log(`[unpaywall] Invalid email configured (UNPAYWALL_EMAIL). Skipping.`);
+        return null;
+      }
+      console.log(`[unpaywall] API error: ${e.response?.status} ${e.message}`);
+    } else {
+      console.log(`[unpaywall] Error: ${(e as Error).message}`);
     }
     return null;
   }
@@ -619,6 +557,7 @@ async function downloadFromUnpaywall(doi: string): Promise<DownloadResult | null
 // ─── Internet Archive ────────────────────────────────────────────────────────
 async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Promise<DownloadResult | null> {
   try {
+    // Use Puppeteer for the SPA (JavaScript-based) interface
     const browser = await getBrowser();
     const page = await browser.newPage();
     await page.setUserAgent(
@@ -627,15 +566,18 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 
     const searchUrl = `https://archive.org/search?query=${encodeURIComponent(doi)}`;
     await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Wait for results to render
     await page.waitForSelector('a.result-heading, a.item-title, [class*="result"]', { timeout: 10000 }).catch(() => {});
 
-    const firstResult = await page.$eval('a.result-heading, a.item-title, [class*="result"] a[href]',
-      (el: Element) => (el as HTMLAnchorElement).href
+    const firstResult = await page.$eval('a.result-heading, a.item-title, [class*="result"] a[href]', (el: Element) =>
+      (el as HTMLAnchorElement).href
     ).catch(() => null);
 
     await page.close();
     if (!firstResult) return null;
 
+    // Navigate to item page and find PDF
     const page2 = await browser.newPage();
     await page2.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -645,10 +587,12 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 
     const pdfLink = await page2.$eval('a[href$=".pdf"]', (el: Element) => (el as HTMLAnchorElement).href).catch(() => null);
     if (!pdfLink) {
+      // Try download button
       const dlBtn = await page2.$eval('[class*="download"], .format-group a', (el: Element) => (el as HTMLAnchorElement).href).catch(() => null);
       await page2.close();
       if (!dlBtn) return null;
-      return await downloadFileFromUrl(dlBtn, doi, 'ia_');
+      const result = await downloadFileFromUrl(dlBtn, doi, 'ia_');
+      return result;
     }
 
     await page2.close();
@@ -660,30 +604,20 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(doi: string, userId: number, maxRetries = 5): Promise<DownloadResult> {
-
-  // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
-  const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
-    ['Unpaywall',      () => downloadFromUnpaywall(doi)],
-    ['Semantic Scholar', () => downloadFromSemanticScholar(doi)],
-    ['Europe PMC',     () => downloadFromEuropePMC(doi)],
-    ['PMC OA',         () => downloadFromPMC(doi)],
-    ['CORE',           () => downloadFromCORE(doi)],
-  ];
-
-  for (const [name, fn] of oaSources) {
-    console.log(`[download] Trying ${name} for ${doi}...`);
-    try {
-      const r = await fn();
-      if (r) { console.log(`[download] ✅ ${name} success`); return r; }
-    } catch { /* continue */ }
+  // ─── Step 1: Unpaywall (무료·합법 OA) ────────────────────────────────────
+  console.log(`[download] Trying Unpaywall OA for ${doi}...`);
+  const unpaywallResult = await downloadFromUnpaywall(doi);
+  if (unpaywallResult) {
+    console.log(`[download] ✅ Unpaywall success for ${doi}`);
+    return unpaywallResult;
   }
 
-  // ─── Phase 2: Sci-Hub.run API (빠른 캐시 우선) ───────────────────────────
+  // ─── Step 2: Sci-Hub.run API 우선 시도 (가장 빠르고 안정적) ──────────────
   const { rows: runRows } = await pool.query(
     `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
   );
   if (runRows.length > 0) {
-    console.log('[download] Trying sci-hub.run API...');
+    console.log(`[download] Trying sci-hub.run API first...`);
     const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
     if (runResult) {
       await pool.query(
@@ -694,11 +628,13 @@ export async function downloadPaper(doi: string, userId: number, maxRetries = 5)
     }
   }
 
-  // ─── Phase 3: Remaining servers (Sci-Hub mirrors, LibGen, Archive, Z-Lib) ──
+  // ─── Step 3: 나머지 서버 순차 시도 ──────────────────────────────────────
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
 
+  // sci-hub.run 제외 (이미 위에서 시도)
   const remaining = servers.filter(s => !s.url.includes('sci-hub.run'));
+
   const tried = new Set<number>();
 
   for (let i = 0; i < maxRetries; i++) {
@@ -718,8 +654,6 @@ export async function downloadPaper(doi: string, userId: number, maxRetries = 5)
       result = await downloadFromAnnasArchive(doi, server);
     } else if (server.type === 'zlibrary') {
       result = await downloadFromZlibrary(doi, server, userId);
-    } else if (server.type === 'ia') {
-      result = await downloadFromInternetArchive(doi, server);
     }
 
     if (result) {

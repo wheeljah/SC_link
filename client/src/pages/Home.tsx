@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../context/AuthContext';
-import { getApiBaseURL, getBackendOrigin } from '../services/api';
 
 export default function Home() {
   const [input, setInput] = useState('');
@@ -11,9 +10,10 @@ export default function Home() {
   const [progress, setProgress] = useState<{ step: string; message: string; percent: number } | null>(null);
   const [result, setResult] = useState<{ filePath: string; fileSize: number; doi: string } | null>(null);
   const [error, setError] = useState('');
-  const [showAuth, setShowAuth] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);   // 로그인 모달 표시 여부
   const { isLoggedIn } = useAuth();
 
+  // 실제 다운로드 실행 (로그인 확인 후)
   const doDownload = async () => {
     if (!input.trim()) return;
     setLoading(true);
@@ -22,7 +22,7 @@ export default function Home() {
     setProgress({ step: 'start', message: '요청 시작 중...', percent: 10 });
 
     try {
-      const res = await fetch(`${getApiBaseURL()}/papers/download`, {
+      const res = await fetch('/api/v1/papers/download', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,7 +51,7 @@ export default function Home() {
           if (!data) continue;
           const payload = JSON.parse(data);
           if (event === 'progress') setProgress({ step: payload.step, message: payload.message, percent: payload.progress });
-          if (event === 'complete') setResult({ filePath: `${getBackendOrigin()}${payload.filePath}`, fileSize: payload.fileSize, doi: payload.doi });
+          if (event === 'complete') setResult({ filePath: payload.filePath, fileSize: payload.fileSize, doi: payload.doi });
           if (event === 'error') setError(payload.message);
         }
       }
@@ -63,11 +63,12 @@ export default function Home() {
     }
   };
 
+  // 폼 제출: 비로그인이면 로그인 모달, 로그인 상태면 바로 다운로드
   const handleDownload = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
     if (!isLoggedIn) {
-      setShowAuth(true);
+      setShowAuth(true);   // 작동 시도 → 로그인 창 표시
       return;
     }
     doDownload();
@@ -75,6 +76,7 @@ export default function Home() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      {/* 히어로 섹션 */}
       <div className="text-center py-6">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">
           학술 논문, 한 번에 다운로드
@@ -82,6 +84,7 @@ export default function Home() {
         <p className="text-slate-500">DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 다운로드됩니다.</p>
       </div>
 
+      {/* 다운로드 폼 — 모든 사용자可见 */}
       <form onSubmit={handleDownload} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
         <div className="flex gap-3">
           <input
@@ -105,6 +108,7 @@ export default function Home() {
           &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">arXiv:2103.14030</code>
         </p>
 
+        {/* 진행 상황 */}
         {progress && (
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-xs text-slate-500">
@@ -118,16 +122,17 @@ export default function Home() {
               />
             </div>
             <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
-              <span className="font-semibold">진행 중:</span> 서버 연결 &rarr; 논문 검색 &rarr; PDF 확보 &rarr; 저장. 보통 10~30초 소요됩니다.
+              <span className="font-semibold">💡 진행 중:</span> 서버 연결 → 논문 검색 → PDF 확보 → 저장 순으로 진행됩니다. 通常 10~30초 소요됩니다.
             </div>
           </div>
         )}
 
+        {/* 결과 */}
         {result && (
           <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-green-800">다운로드 완료!</p>
+                <p className="text-sm font-semibold text-green-800">✅ 다운로드 완료!</p>
                 <p className="text-xs text-green-600 mt-1">DOI: {result.doi} · {(result.fileSize / 1024 / 1024).toFixed(1)} MB</p>
               </div>
               <a
@@ -142,18 +147,23 @@ export default function Home() {
           </div>
         )}
 
+        {/* 에러 */}
         {error && (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-red-700">❌ {error}</p>
           </div>
         )}
       </form>
 
+      {/* 서버 상태 — 모든 사용자可见 */}
       <ServerStatus compact />
 
+      {/* 커뮤니티 — 모든 사용자可见 */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-slate-800">커뮤니티 요청</h3>
+          <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+            <span>💬</span> 커뮤니티 요청
+          </h3>
           <Link to="/community" className="text-sm text-blue-600 hover:underline">전체 보기</Link>
         </div>
         <p className="text-sm text-slate-500">원하는 논문을 요청하거나, 다른 연구자의 요청에 응답하세요.</p>
@@ -173,6 +183,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 로그인 모달 — 작동 시도 시 표시. 로그인 성공하면 다운로드 자동 재개 */}
       <AuthModal
         open={showAuth}
         onClose={() => setShowAuth(false)}
