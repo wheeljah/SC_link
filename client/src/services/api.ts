@@ -13,7 +13,7 @@ export function getApiBaseURL(): string { return baseURL; }
 async function initApiConfig() {
   try {
     // Load config from public/api-config.json (deployed with the app)
-    const res = await fetch('/api-config.json?v=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(import.meta.env.BASE_URL + 'api-config.json?v=' + Date.now(), { cache: 'no-store' });
     if (res.ok) {
       const config = await res.json();
       if (config.backend) {
