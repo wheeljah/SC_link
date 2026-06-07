@@ -146,23 +146,61 @@ async function getUserCredential(userId: number, serverId: number): Promise<{ lo
 }
 
 // ─── OA: Semantic Scholar ─────────────────────────────────────────────────────
-async function downloadFromSemanticScholar(doi: string): Promise<DownloadResult | null> {
+export interface S2PaperMeta {
+  title?: string;
+  authors?: string;
+  year?: number;
+  journal?: string;
+  citationCount?: number;
+  isOpenAccess?: boolean;
+  openAccessPdfUrl?: string;
+}
+
+export async function fetchPaperMetadataFromS2(doi: string): Promise<S2PaperMeta | null> {
   try {
     const res = await axios.get(
       `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(doi)}`,
       {
-        params: { fields: 'openAccessPdf,title' },
+        params: { fields: 'title,authors,year,journal,citationCount,isOpenAccess,openAccessPdf,publicationVenue' },
         timeout: 10000,
-        headers: { 'User-Agent': 'ScholarLink/1.0 (research tool)' },
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
       }
     );
-    const pdfUrl: string | undefined = res.data?.openAccessPdf?.url;
-    if (!pdfUrl) {
+    const d = res.data;
+    const authors = (d.authors as { name: string }[] | undefined)
+      ?.slice(0, 5).map((a) => a.name).join(', ') ?? undefined;
+    const journal = d.journal?.name ?? d.publicationVenue?.name ?? undefined;
+    return {
+      title: d.title ?? undefined,
+      authors,
+      year: d.year ?? undefined,
+      journal,
+      citationCount: d.citationCount ?? undefined,
+      isOpenAccess: d.isOpenAccess ?? undefined,
+      openAccessPdfUrl: d.openAccessPdf?.url ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function downloadFromSemanticScholar(doi: string): Promise<DownloadResult | null> {
+  try {
+    const meta = await fetchPaperMetadataFromS2(doi);
+    if (!meta?.openAccessPdfUrl) {
       console.log(`[s2] No OA PDF for ${doi}`);
       return null;
     }
-    console.log(`[s2] OA PDF: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 's2_');
+    console.log(`[s2] OA PDF: ${meta.openAccessPdfUrl}`);
+    const dl = await downloadFileFromUrl(meta.openAccessPdfUrl, doi, 's2_');
+    if (!dl) return null;
+    return {
+      ...dl,
+      title:   meta.title,
+      authors: meta.authors,
+      year:    meta.year,
+      journal: meta.journal,
+    };
   } catch (e) {
     if (axios.isAxiosError(e)) console.log(`[s2] ${e.response?.status} ${e.message}`);
     return null;
@@ -252,29 +290,57 @@ async function downloadFromPMC(doi: string): Promise<DownloadResult | null> {
 
 // ─── OA: CORE API ─────────────────────────────────────────────────────────────
 async function downloadFromCORE(doi: string): Promise<DownloadResult | null> {
+  // API키 없어도 무료 100req/min으로 동작 (키 있으면 Bearer 헤더로 전송)
   const apiKey = process.env.CORE_API_KEY;
-  if (!apiKey) {
-    console.log('[core] CORE_API_KEY not set, skipping');
-    return null;
-  }
+  const headers: Record<string, string> = { 'User-Agent': 'ScholarLink/1.0' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
   try {
     const res = await axios.get(
       'https://api.core.ac.uk/v3/search/works',
       {
-        params: { q: `doi:${doi}`, limit: 1, api_key: apiKey },
-        timeout: 10000,
+        params: { q: `doi:"${doi}"`, limit: 3 },
+        headers,
+        timeout: 12000,
       }
     );
-    const work = res.data?.results?.[0];
-    if (!work) return null;
+    const results: Array<{
+      downloadUrl?: string;
+      fullTextUrl?: string;
+      links?: Array<{ type?: string; url?: string }>;
+      title?: string;
+      authors?: Array<{ name?: string }>;
+      year?: number;
+      journals?: Array<{ title?: string }>;
+    }> = res.data?.results ?? [];
 
-    const pdfUrl: string | undefined = work.downloadUrl || work.fullTextUrl;
-    if (!pdfUrl) {
-      console.log(`[core] No PDF URL for ${doi}`);
-      return null;
+    for (const work of results) {
+      // 다운로드 후보 수집 (우선순위: downloadUrl > links[type=download] > fullTextUrl > links[type=reader])
+      const candidates: string[] = [];
+      if (work.downloadUrl) candidates.push(work.downloadUrl);
+      for (const link of work.links ?? []) {
+        if (link.url && link.type === 'download') candidates.push(link.url);
+      }
+      if (work.fullTextUrl) candidates.push(work.fullTextUrl);
+      for (const link of work.links ?? []) {
+        if (link.url && link.type !== 'download') candidates.push(link.url);
+      }
+
+      for (const url of candidates) {
+        const dl = await downloadFileFromUrl(url, doi, 'core_');
+        if (dl) {
+          return {
+            ...dl,
+            title:   work.title,
+            authors: work.authors?.slice(0, 5).map(a => a.name ?? '').join(', '),
+            year:    work.year,
+            journal: work.journals?.[0]?.title,
+          };
+        }
+      }
     }
-    console.log(`[core] PDF: ${pdfUrl}`);
-    return await downloadFileFromUrl(pdfUrl, doi, 'core_');
+    console.log(`[core] No downloadable PDF for ${doi}`);
+    return null;
   } catch (e) {
     if (axios.isAxiosError(e)) console.log(`[core] ${e.response?.status} ${e.message}`);
     return null;

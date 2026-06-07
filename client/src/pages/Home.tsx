@@ -10,6 +10,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ step: string; message: string; percent: number } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [paperMeta, setPaperMeta] = useState<{
+    title?: string; authors?: string; year?: number;
+    journal?: string; citationCount?: number;
+  } | null>(null);
   const [result, setResult] = useState<{ filePath: string; fileSize: number; doi: string } | null>(null);
   const [error, setError] = useState('');
   const [showAuth, setShowAuth] = useState(false);
@@ -21,6 +25,7 @@ export default function Home() {
     setError('');
     setResult(null);
     setLogs([]);
+    setPaperMeta(null);
     setProgress({ step: 'start', message: '요청 시작 중...', percent: 10 });
 
     try {
@@ -54,6 +59,7 @@ export default function Home() {
           const payload = JSON.parse(data);
           if (event === 'progress') setProgress({ step: payload.step, message: payload.message, percent: payload.progress });
           if (event === 'log') setLogs(prev => [...prev, payload.message as string]);
+          if (event === 'metadata') setPaperMeta(payload as typeof paperMeta);
           if (event === 'complete') setResult({ filePath: `${getBackendOrigin()}${payload.filePath}`, fileSize: payload.fileSize, doi: payload.doi });
           if (event === 'error') setError(payload.message);
         }
@@ -136,6 +142,21 @@ export default function Home() {
               </div>
             )}
             <p className="text-xs text-slate-400">논문에 따라 시간이 많이 소요될 수 있습니다.</p>
+            <p className="text-xs text-blue-500 mt-1">
+              찾기 어려우시면 아래 커뮤니티 요청으로 다른 연구자에게 요청해보세요.
+            </p>
+          </div>
+        )}
+
+        {paperMeta?.title && (
+          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm space-y-0.5">
+            <p className="font-semibold text-slate-800 leading-snug">{paperMeta.title}</p>
+            {paperMeta.authors && <p className="text-slate-500 text-xs truncate">{paperMeta.authors}</p>}
+            <div className="flex gap-3 text-xs text-slate-400 mt-1">
+              {paperMeta.year    && <span>📅 {paperMeta.year}</span>}
+              {paperMeta.journal && <span className="truncate">📖 {paperMeta.journal}</span>}
+              {paperMeta.citationCount !== undefined && <span>💬 인용 {paperMeta.citationCount.toLocaleString()}회</span>}
+            </div>
           </div>
         )}
 

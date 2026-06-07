@@ -86,10 +86,41 @@ export async function resolveArxivToDoi(arxivId: string): Promise<string | null>
   }
 }
 
-export async function resolveTitleToDoi(title: string): Promise<{ doi: string; resolvedTitle: string } | null> {
+export async function resolveTitleToDoi(title: string): Promise<{ doi: string; resolvedTitle: string; openAccessPdfUrl?: string } | null> {
+  const axios = (await import('axios')).default;
+
+  // ① Semantic Scholar paper/search (학술 논문 정확도 높음)
   try {
-    const axios = (await import('axios')).default;
-    const res = await axios.get('https://api.crossref.org/works', {
+    const s2Res = await axios.get(
+      'https://api.semanticscholar.org/graph/v1/paper/search',
+      {
+        params: {
+          query: title,
+          limit: 3,
+          fields: 'externalIds,title,openAccessPdf,year,authors',
+        },
+        timeout: 10000,
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
+      }
+    );
+    const s2Items = s2Res.data?.data as Array<{
+      externalIds?: { DOI?: string };
+      title?: string;
+      openAccessPdf?: { url?: string };
+    }> | undefined;
+    const s2Best = s2Items?.find(p => p.externalIds?.DOI);
+    if (s2Best?.externalIds?.DOI) {
+      return {
+        doi: s2Best.externalIds.DOI,
+        resolvedTitle: s2Best.title ?? title,
+        openAccessPdfUrl: s2Best.openAccessPdf?.url,
+      };
+    }
+  } catch { /* fallback */ }
+
+  // ② CrossRef fallback
+  try {
+    const crRes = await axios.get('https://api.crossref.org/works', {
       params: {
         'query.bibliographic': title,
         rows: 3,
@@ -98,12 +129,10 @@ export async function resolveTitleToDoi(title: string): Promise<{ doi: string; r
       timeout: 10000,
       headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
     });
-    const items = res.data?.message?.items;
+    const items = crRes.data?.message?.items;
     if (!items?.length) return null;
     const best = items[0];
-    const doi: string = best.DOI;
-    const resolvedTitle: string = best.title?.[0] ?? title;
-    return { doi, resolvedTitle };
+    return { doi: best.DOI as string, resolvedTitle: (best.title?.[0] as string) ?? title };
   } catch {
     return null;
   }

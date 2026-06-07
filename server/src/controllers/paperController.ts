@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { pool } from '../db/pool';
 import { parseInput, resolvePmidToDoi, resolveArxivToDoi, resolveTitleToDoi } from '../services/doiParserService';
-import { downloadPaper } from '../services/downloadService';
+import { downloadPaper, fetchPaperMetadataFromS2 } from '../services/downloadService';
 import { AuthRequest } from '../middleware/auth';
 import path from 'path';
 import fs from 'fs';
@@ -68,29 +68,56 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
 
   try {
     if (parsed.type === 'title') {
-      send('progress', { step: 'resolving', message: 'CrossRef에서 DOI 조회 중...', progress: 25 });
+      send('progress', { step: 'resolving', message: 'Semantic Scholar / CrossRef DOI 조회 중...', progress: 25 });
     }
     send('progress', { step: 'downloading', message: '다운로드 서버 선택 중...', progress: 40 });
+
+    // 메타데이터 조회 + 다운로드 병렬 실행
     console.log(`[papers] Starting downloadPaper for DOI=${doi}, userId=${req.userId}`);
-    const result = await downloadPaper(doi, req.userId!, (msg) => {
-      send('log', { message: msg });
-    });
+    const [result, meta] = await Promise.all([
+      downloadPaper(doi, req.userId!, (msg) => { send('log', { message: msg }); }),
+      fetchPaperMetadataFromS2(doi).catch(() => null),
+    ]);
     console.log(`[papers] downloadPaper completed: ${result.fileSize} bytes`);
+
+    // 논문 메타데이터 SSE 전송
+    if (meta?.title) {
+      send('metadata', {
+        title:         meta.title,
+        authors:       meta.authors,
+        year:          meta.year,
+        journal:       meta.journal,
+        citationCount: meta.citationCount,
+        isOpenAccess:  meta.isOpenAccess,
+      });
+    }
 
     send('progress', { step: 'saving', message: '파일 저장 중...', progress: 80 });
 
+    // title/authors/year/journal DB 저장
+    const finalTitle   = result.title   ?? meta?.title;
+    const finalAuthors = result.authors ?? meta?.authors;
+    const finalYear    = result.year    ?? meta?.year;
+    const finalJournal = result.journal ?? meta?.journal;
+
     await pool.query(
-      `UPDATE paper_requests SET status='completed', file_path=$1, file_size=$2, downloaded_at=NOW() WHERE id=$3`,
-      [result.filePath, result.fileSize, requestId]
+      `UPDATE paper_requests
+       SET status='completed', file_path=$1, file_size=$2, downloaded_at=NOW(),
+           title=$3, authors=$4, year=$5, journal=$6
+       WHERE id=$7`,
+      [result.filePath, result.fileSize, finalTitle, finalAuthors, finalYear, finalJournal, requestId]
     );
     await pool.query(`UPDATE users SET download_count = download_count + 1 WHERE id = $1`, [req.userId]);
 
     send('complete', {
       requestId,
       doi,
-      filePath: result.filePath,
-      fileSize: result.fileSize,
-      progress: 100,
+      filePath:  result.filePath,
+      fileSize:  result.fileSize,
+      title:     finalTitle,
+      authors:   finalAuthors,
+      year:      finalYear,
+      progress:  100,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '다운로드에 실패했습니다.';
