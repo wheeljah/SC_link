@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { pool } from '../db/pool';
-import { parseInput, resolvePmidToDoi, resolveArxivToDoi } from '../services/doiParserService';
+import { parseInput, resolvePmidToDoi, resolveArxivToDoi, resolveTitleToDoi } from '../services/doiParserService';
 import { downloadPaper } from '../services/downloadService';
 import { AuthRequest } from '../middleware/auth';
 import path from 'path';
@@ -27,8 +27,15 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
   } else if (parsed.type === 'arxiv') {
     const resolved = await resolveArxivToDoi(parsed.value);
     doi = resolved || undefined;
+  } else if (parsed.type === 'title') {
+    const resolved = await resolveTitleToDoi(parsed.value);
+    if (!resolved) {
+      res.status(422).json({ success: false, message: '제목으로 DOI를 찾을 수 없습니다. DOI를 직접 입력해주세요.' });
+      return;
+    }
+    doi = resolved.doi;
   } else if (parsed.type === 'unknown') {
-    res.status(400).json({ success: false, message: '지원하지 않는 입력 형식입니다. DOI, PMID, arXiv ID, 또는 URL을 입력해주세요.' });
+    res.status(400).json({ success: false, message: '지원하지 않는 입력 형식입니다. DOI, PMID, arXiv ID, 논문 제목, 또는 URL을 입력해주세요.' });
     return;
   }
 
@@ -60,9 +67,14 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
   send('progress', { step: 'parsing', message: 'DOI 분석 중...', progress: 20 });
 
   try {
+    if (parsed.type === 'title') {
+      send('progress', { step: 'resolving', message: 'CrossRef에서 DOI 조회 중...', progress: 25 });
+    }
     send('progress', { step: 'downloading', message: '다운로드 서버 선택 중...', progress: 40 });
     console.log(`[papers] Starting downloadPaper for DOI=${doi}, userId=${req.userId}`);
-    const result = await downloadPaper(doi, req.userId!);
+    const result = await downloadPaper(doi, req.userId!, (msg) => {
+      send('log', { message: msg });
+    });
     console.log(`[papers] downloadPaper completed: ${result.fileSize} bytes`);
 
     send('progress', { step: 'saving', message: '파일 저장 중...', progress: 80 });

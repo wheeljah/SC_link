@@ -9,6 +9,7 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ step: string; message: string; percent: number } | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
   const [result, setResult] = useState<{ filePath: string; fileSize: number; doi: string } | null>(null);
   const [error, setError] = useState('');
   const [showAuth, setShowAuth] = useState(false);
@@ -19,6 +20,7 @@ export default function Home() {
     setLoading(true);
     setError('');
     setResult(null);
+    setLogs([]);
     setProgress({ step: 'start', message: '요청 시작 중...', percent: 10 });
 
     try {
@@ -51,6 +53,7 @@ export default function Home() {
           if (!data) continue;
           const payload = JSON.parse(data);
           if (event === 'progress') setProgress({ step: payload.step, message: payload.message, percent: payload.progress });
+          if (event === 'log') setLogs(prev => [...prev, payload.message as string]);
           if (event === 'complete') setResult({ filePath: `${getBackendOrigin()}${payload.filePath}`, fileSize: payload.fileSize, doi: payload.doi });
           if (event === 'error') setError(payload.message);
         }
@@ -88,7 +91,7 @@ export default function Home() {
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="DOI, PMID, arXiv ID, 또는 저널 URL 입력..."
+            placeholder="DOI, PMID, arXiv ID, 논문 제목, 또는 저널 URL 입력..."
             className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
@@ -103,6 +106,7 @@ export default function Home() {
           예시: <code className="bg-slate-100 px-1 rounded">10.1038/nature12373</code>
           &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">PMID: 29988009</code>
           &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">arXiv:2103.14030</code>
+          &nbsp;|&nbsp;<code className="bg-slate-100 px-1 rounded">Attention is all you need</code>
         </p>
 
         {progress && (
@@ -117,9 +121,21 @@ export default function Home() {
                 style={{ width: `${progress.percent}%` }}
               />
             </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
-              <span className="font-semibold">진행 중:</span> 서버 연결 &rarr; 논문 검색 &rarr; PDF 확보 &rarr; 저장. 보통 10~30초 소요됩니다.
-            </div>
+            {logs.length > 0 && (
+              <div className="bg-slate-950 rounded-lg px-3 py-2 max-h-40 overflow-y-auto font-mono text-xs">
+                {logs.map((log, i) => {
+                  const isOk  = log.startsWith('✅');
+                  const isFail = log.startsWith('✗');
+                  const color = isOk ? 'text-green-400' : isFail ? 'text-red-400' : 'text-slate-300';
+                  return (
+                    <div key={i} className={`leading-5 ${color}`}>
+                      {log}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-xs text-slate-400">보통 10~30초 소요됩니다. 여러 서버를 순차 시도합니다.</p>
           </div>
         )}
 

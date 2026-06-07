@@ -1,5 +1,5 @@
 export interface ParsedInput {
-  type: 'doi' | 'pmid' | 'arxiv' | 'url' | 'unknown';
+  type: 'doi' | 'pmid' | 'arxiv' | 'url' | 'title' | 'unknown';
   value: string;
   doi?: string;
 }
@@ -49,6 +49,11 @@ export function parseInput(raw: string): ParsedInput {
     // no-op
   }
 
+  // 논문 제목으로 간주 (길이 10자 이상, 공백 포함)
+  if (input.length >= 10 && input.includes(' ')) {
+    return { type: 'title', value: input };
+  }
+
   return { type: 'unknown', value: input };
 }
 
@@ -76,6 +81,29 @@ export async function resolveArxivToDoi(arxivId: string): Promise<string | null>
     );
     const doiMatch = res.data?.match(/doi\.org\/(10\.[^"'\s<>]+)/i);
     return doiMatch ? doiMatch[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveTitleToDoi(title: string): Promise<{ doi: string; resolvedTitle: string } | null> {
+  try {
+    const axios = (await import('axios')).default;
+    const res = await axios.get('https://api.crossref.org/works', {
+      params: {
+        'query.bibliographic': title,
+        rows: 3,
+        select: 'DOI,title,author,published',
+      },
+      timeout: 10000,
+      headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
+    });
+    const items = res.data?.message?.items;
+    if (!items?.length) return null;
+    const best = items[0];
+    const doi: string = best.DOI;
+    const resolvedTitle: string = best.title?.[0] ?? title;
+    return { doi, resolvedTitle };
   } catch {
     return null;
   }

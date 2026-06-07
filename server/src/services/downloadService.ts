@@ -28,6 +28,18 @@ let browserPromise: ReturnType<typeof import('puppeteer').default.launch> | null
 // Render 등 Chrome 없는 환경에서 Puppeteer 시도 자체를 건너뜀
 const PUPPETEER_AVAILABLE = process.env.PUPPETEER_SKIP_DOWNLOAD !== 'true';
 
+// ─── User-Agent 순환 (봇 탐지 우회) ─────────────────────────────────────────
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+];
+const randomUA = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+
+
+
 async function getBrowser() {
   if (!PUPPETEER_AVAILABLE) throw new Error('[puppeteer] Chrome 사용 불가 (PUPPETEER_SKIP_DOWNLOAD=true)');
   if (!browserPromise) {
@@ -256,6 +268,28 @@ async function downloadFromCORE(doi: string): Promise<DownloadResult | null> {
   }
 }
 
+
+// ─── RISS (학술연구정보서비스) ─────────────────────────────────────────────
+// KCI(한국연구재단) 등재 국내 논문 full-text 접근
+async function downloadFromRISS(doi: string): Promise<DownloadResult | null> {
+  try {
+    const searchUrl = `https://www.riss.kr/search/Search.do?isDetailSearch=N&searchGubun=true&viewYn=OP&query=${encodeURIComponent(doi)}&strQuery=${encodeURIComponent(doi)}&colName=re_a_kor&resultCount=5`;
+    const html = await axios.get(searchUrl, {
+      timeout: 12000,
+      headers: { 'User-Agent': randomUA() },
+    }).then(r => r.data as string);
+
+    const $ = cheerio.load(html);
+    const pdfLink = $('a[href*="/pdf/"], a[href*="downloadFullText"], a[href*=".pdf"]').first().attr('href');
+    if (!pdfLink) return null;
+
+    const fullUrl = pdfLink.startsWith('http') ? pdfLink : `https://www.riss.kr${pdfLink}`;
+    return await downloadFileFromUrl(fullUrl, doi, 'riss_');
+  } catch {
+    return null;
+  }
+}
+
 // ─── Sci-Hub.run (FastAPI backend) ───────────────────────────────────────────
 async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
   console.log(`[scihub.run] Called for DOI=${doi}`);
@@ -334,7 +368,10 @@ async function scrapeSciHubPage(doi: string, server: ServerInfo): Promise<string
 
     const embedSrc = $('embed[type="application/pdf"]').attr('src') ||
                      $('iframe').filter('[src*="pdf"], [src*="viewer"]').attr('src');
-    if (embedSrc) return embedSrc.startsWith('http') ? embedSrc : `${server.url}${embedSrc}`;
+    if (embedSrc) {
+      const fixedEmbed = embedSrc.startsWith('//') ? 'https:' + embedSrc : embedSrc;
+      return fixedEmbed.startsWith('http') ? fixedEmbed : `${server.url}${fixedEmbed}`;
+    }
 
     const pdfHref = $('a[href$=".pdf"]').first().attr('href') ||
                     $('a[href*=".pdf?"]').first().attr('href') ||
@@ -592,6 +629,27 @@ async function downloadFromZlibrary(doi: string, server: ServerInfo, userId: num
 }
 
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
+interface UnpaywallLocation {
+  url?: string;
+  url_for_pdf?: string;
+  url_for_landing_page?: string;
+  host_type?: string;  // 'publisher' | 'repository'
+  version?: string;    // 'publishedVersion' | 'acceptedVersion' | 'submittedVersion'
+}
+
+function sortUnpaywallLocations(locs: UnpaywallLocation[]): UnpaywallLocation[] {
+  const hostPriority: Record<string, number> = { publisher: 0, repository: 1 };
+  const verPriority: Record<string, number>  = { publishedVersion: 0, acceptedVersion: 1, submittedVersion: 2 };
+  return [...locs].sort((a, b) => {
+    const ha = hostPriority[a.host_type ?? ''] ?? 9;
+    const hb = hostPriority[b.host_type ?? ''] ?? 9;
+    if (ha !== hb) return ha - hb;
+    const va = verPriority[a.version ?? ''] ?? 9;
+    const vb = verPriority[b.version ?? ''] ?? 9;
+    return va - vb;
+  });
+}
+
 async function downloadFromUnpaywall(doi: string): Promise<DownloadResult | null> {
   const email = process.env.UNPAYWALL_EMAIL;
   if (!email) { console.log('[unpaywall] UNPAYWALL_EMAIL not set. Skipping.'); return null; }
@@ -602,19 +660,35 @@ async function downloadFromUnpaywall(doi: string): Promise<DownloadResult | null
       { timeout: 15000, params: { email } }
     );
     const data = res.data;
-    if (!data.is_oa) { console.log(`[unpaywall] ${doi}: not OA`); return null; }
+    if (!data.is_oa) { console.log(`[unpaywall] ${doi}: not OA (oa_status=${data.oa_status})`); return null; }
 
-    const bestPdfUrl = data.best_oa_location?.url_for_pdf;
-    if (bestPdfUrl) {
-      console.log(`[unpaywall] OA PDF: ${bestPdfUrl}`);
-      const result = await downloadFileFromUrl(bestPdfUrl, doi, 'unpaywall_');
-      if (result) return result;
+    // oa_locations 전체 수집 (best + 나머지) → 중복 제거 후 우선순위 정렬
+    const allLocs: UnpaywallLocation[] = [];
+    if (data.best_oa_location) allLocs.push(data.best_oa_location);
+    for (const loc of data.oa_locations ?? []) {
+      if (!allLocs.some(l => l.url_for_pdf === loc.url_for_pdf && l.url === loc.url)) {
+        allLocs.push(loc);
+      }
     }
+    const sorted = sortUnpaywallLocations(allLocs);
+    console.log(`[unpaywall] ${sorted.length}개 OA 위치 시도 (oa_status=${data.oa_status})`);
 
-    const bestUrl = data.best_oa_location?.url;
-    if (bestUrl) {
-      const result = await downloadFileFromUrl(bestUrl, doi, 'unpaywall_');
-      if (result) return result;
+    for (const loc of sorted) {
+      // 1순위: 직접 PDF URL
+      if (loc.url_for_pdf) {
+        const r = await downloadFileFromUrl(loc.url_for_pdf, doi, 'unpaywall_');
+        if (r) { console.log(`[unpaywall] ✅ url_for_pdf (${loc.host_type})`); return r; }
+      }
+      // 2순위: 일반 URL (landing page or direct)
+      if (loc.url) {
+        const r = await downloadFileFromUrl(loc.url, doi, 'unpaywall_');
+        if (r) { console.log(`[unpaywall] ✅ url (${loc.host_type})`); return r; }
+      }
+      // 3순위: landing page
+      if (loc.url_for_landing_page && loc.url_for_landing_page !== loc.url) {
+        const r = await downloadFileFromUrl(loc.url_for_landing_page, doi, 'unpaywall_');
+        if (r) { console.log(`[unpaywall] ✅ landing_page (${loc.host_type})`); return r; }
+      }
     }
     return null;
   } catch (e) {
@@ -669,76 +743,106 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
-export async function downloadPaper(doi: string, userId: number, maxRetries = 5): Promise<DownloadResult> {
+export async function downloadPaper(
+  doi: string,
+  userId: number,
+  onProgress?: (msg: string) => void
+): Promise<DownloadResult> {
+
+  const progress = (msg: string) => { onProgress?.(msg); console.log(`[download] ${msg}`); };
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
-    ['Unpaywall',      () => downloadFromUnpaywall(doi)],
+    ['Unpaywall',        () => downloadFromUnpaywall(doi)],
     ['Semantic Scholar', () => downloadFromSemanticScholar(doi)],
-    ['Europe PMC',     () => downloadFromEuropePMC(doi)],
-    ['PMC OA',         () => downloadFromPMC(doi)],
-    ['CORE',           () => downloadFromCORE(doi)],
+    ['Europe PMC',       () => downloadFromEuropePMC(doi)],
+    ['PMC OA',           () => downloadFromPMC(doi)],
+    ['CORE',             () => downloadFromCORE(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
-    console.log(`[download] Trying ${name} for ${doi}...`);
+    progress(`🔍 ${name} 확인 중...`);
     try {
       const r = await fn();
-      if (r) { console.log(`[download] ✅ ${name} success`); return r; }
-    } catch { /* continue */ }
+      if (r) { progress(`✅ ${name} — PDF 확보`); return r; }
+      progress(`✗ ${name} — 없음`);
+    } catch { progress(`✗ ${name} — 오류`); }
   }
+
+  // ─── Phase 1.5: RISS (국내 기관 학술DB, KCI 논문) ──────────────────────────
+  progress(`🔍 RISS 국내 학술DB 확인 중...`);
+  try {
+    const rissResult = await downloadFromRISS(doi);
+    if (rissResult) { progress(`✅ RISS — PDF 확보`); return rissResult; }
+    progress(`✗ RISS — 없음`);
+  } catch { progress(`✗ RISS — 오류`); }
 
   // ─── Phase 2: Sci-Hub.run API (빠른 캐시 우선) ───────────────────────────
   const { rows: runRows } = await pool.query(
     `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
   );
   if (runRows.length > 0) {
-    console.log('[download] Trying sci-hub.run API...');
+    progress(`🔍 Sci-Hub API 캐시 확인 중...`);
     const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
     if (runResult) {
+      progress(`✅ Sci-Hub API — PDF 확보`);
       await pool.query(
         `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
         [runRows[0].id]
       );
       return runResult;
     }
+    progress(`✗ Sci-Hub API — 없음`);
   }
 
-  // ─── Phase 3: Remaining servers (Sci-Hub mirrors, LibGen, Archive, Z-Lib) ──
+  // ─── Phase 3: Remaining servers — 전체 순차 시도 ────────────────────────────
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
 
-  const remaining = servers.filter(s => !s.url.includes('sci-hub.run'));
-  const tried = new Set<number>();
+  // 책 챕터 DOI 판별 (Springer: 10.1007/978-... 또는 _ 포함)
+  const isBookChapter = /^10\.\d{4}\/978-/.test(doi) || doi.includes('_');
 
-  for (let i = 0; i < maxRetries; i++) {
-    const available = remaining.filter(s => !tried.has(s.id));
-    if (available.length === 0) break;
+  // 시도 순서: 책 챕터이면 Anna's Archive 우선, 그 다음 Sci-Hub → LibGen
+  const remaining = servers
+    .filter(s => !s.url.includes('sci-hub.run'))
+    .sort((a, b) => {
+      if (isBookChapter) {
+        const priority: Record<string, number> = { archive: 0, libgen: 1, scihub: 2, zlibrary: 3, ia: 4 };
+        return (priority[a.type] ?? 5) - (priority[b.type] ?? 5);
+      }
+      const priority: Record<string, number> = { scihub: 0, libgen: 1, archive: 2, zlibrary: 3, ia: 4 };
+      return (priority[a.type] ?? 5) - (priority[b.type] ?? 5);
+    });
 
-    const server = pickServer(available);
-    tried.add(server.id);
+  progress(`📋 ${remaining.length}개 서버 순차 시도 시작...`);
 
+  for (const server of remaining) {
+    progress(`🔍 ${server.name} 확인 중...`);
     let result: DownloadResult | null = null;
 
-    if (server.type === 'scihub') {
-      result = await downloadFromSciHub(doi, server);
-    } else if (server.type === 'libgen') {
-      result = await downloadFromLibGen(doi, server);
-    } else if (server.type === 'archive') {
-      result = await downloadFromAnnasArchive(doi, server);
-    } else if (server.type === 'zlibrary') {
-      result = await downloadFromZlibrary(doi, server, userId);
-    } else if (server.type === 'ia') {
-      result = await downloadFromInternetArchive(doi, server);
-    }
+    try {
+      if (server.type === 'scihub') {
+        result = await downloadFromSciHub(doi, server);
+      } else if (server.type === 'libgen') {
+        result = await downloadFromLibGen(doi, server);
+      } else if (server.type === 'archive') {
+        result = await downloadFromAnnasArchive(doi, server);
+      } else if (server.type === 'zlibrary') {
+        result = await downloadFromZlibrary(doi, server, userId);
+      } else if (server.type === 'ia') {
+        result = await downloadFromInternetArchive(doi, server);
+      }
+    } catch { progress(`✗ ${server.name} — 오류`); }
 
     if (result) {
+      progress(`✅ ${server.name} — PDF 확보`);
       await pool.query(
         `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
         [server.id]
       );
       return result;
     }
+    progress(`✗ ${server.name} — 없음`);
   }
 
   throw new Error('PDF를 찾을 수 없습니다. 잠시 후 다시 시도해주세요.');
