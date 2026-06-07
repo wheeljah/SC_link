@@ -135,7 +135,7 @@ export default function Home() {
                 })}
               </div>
             )}
-            <p className="text-xs text-slate-400">보통 10~30초 소요됩니다. 여러 서버를 순차 시도합니다.</p>
+            <p className="text-xs text-slate-400">논문에 따라 시간이 많이 소요될 수 있습니다.</p>
           </div>
         )}
 
@@ -159,8 +159,11 @@ export default function Home() {
         )}
 
         {error && (
-          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3">
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
             <p className="text-sm text-red-700">{error}</p>
+            <p className="text-xs text-slate-500">
+              아래 커뮤니티 요청으로 다른 연구자에게 요청해보세요.
+            </p>
           </div>
         )}
       </form>

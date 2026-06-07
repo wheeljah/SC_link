@@ -20,37 +20,42 @@ export default function TopAdBanner() {
     <div
       role="banner"
       aria-label="Advertisement"
-      className="fixed top-0 left-0 right-0 z-[9999] h-10 flex items-center justify-between px-4 gap-2"
+      className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between px-3 gap-2 py-1 min-h-[40px]"
       style={{ backgroundColor: banner.bg_color, color: banner.text_color }}
     >
       {/* 중앙 콘텐츠 */}
-      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
-        <p className="text-sm whitespace-nowrap overflow-hidden text-ellipsis text-center">
+      <div className="flex-1 flex items-center justify-center min-w-0">
+        {/* 모바일: 브랜드명 + 슬로건 두 줄 */}
+        <div className="flex flex-col items-center sm:hidden leading-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-bold border border-white/40 text-white/70 rounded px-1 leading-none">
+              광고
+            </span>
+            {banner.advertiser_name && (
+              <span className="text-white font-bold text-sm">{banner.advertiser_name}</span>
+            )}
+          </div>
+          {hasTwo && (
+            <span className="text-white/90 text-xs">{right}</span>
+          )}
+        </div>
 
-          {/* 광고 표시 배지 */}
+        {/* 데스크톱: 한 줄 */}
+        <p className="hidden sm:block text-sm whitespace-nowrap overflow-hidden text-ellipsis text-center">
           <span className="inline-block text-[10px] font-bold border border-white/40 text-white/70 rounded px-1 py-0.5 mr-2 leading-none align-middle">
             📢 광고
           </span>
-
-          {/* ① 브랜드명 — 맨 앞, 흰 굵은 폰트 */}
           {banner.advertiser_name && (
             <>
               <span className="text-white font-bold">{banner.advertiser_name}</span>
-              <span className="mx-2 text-white/30 hidden sm:inline">|</span>
+              <span className="mx-2 text-white/30">|</span>
             </>
           )}
-
           {hasTwo ? (
             <>
-              {/* 모바일: 오른쪽 메시지만 표시 */}
-              <span className="sm:hidden text-white/90">{right}</span>
-
-              {/* 데스크톱: 좌 | 우 전체 */}
-              <span className="hidden sm:inline">
-                <span className="text-white/70">{left}</span>
-                <span className="mx-2 text-white/30">|</span>
-                <span className="text-white font-medium">{right}</span>
-              </span>
+              <span className="text-white/70">{left}</span>
+              <span className="mx-2 text-white/30">|</span>
+              <span className="text-white font-medium">{right}</span>
             </>
           ) : (
             <span className="text-white/90">
@@ -58,11 +63,9 @@ export default function TopAdBanner() {
               {banner.message}
             </span>
           )}
-
-          {/* CTA 링크 */}
           {banner.cta_text && banner.cta_url && (
             <>
-              <span className="mx-2 text-white/30 hidden sm:inline">—</span>
+              <span className="mx-2 text-white/30">—</span>
               <a
                 href={banner.cta_url}
                 target="_blank"
