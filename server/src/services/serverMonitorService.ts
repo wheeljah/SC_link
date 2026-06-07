@@ -79,7 +79,7 @@ export function startMonitoringCron(): void {
 
   cron.schedule('*/10 * * * *', async () => {
     const { rows } = await pool.query<ServerRow>(
-      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type IN ('libgen','archive','library')`
+      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type IN ('libgen','archive','library','ia')`
     );
     await Promise.allSettled(rows.map(async (s) => {
       const r = await checkServer(s);
