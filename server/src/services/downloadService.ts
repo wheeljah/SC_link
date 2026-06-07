@@ -748,6 +748,52 @@ function sortUnpaywallLocations(locs: UnpaywallLocation[]): UnpaywallLocation[] 
   });
 }
 
+// ─── OpenAlex (PaperGate 동일 데이터 소스 — 450M 논문, API key 불필요) ────────
+async function downloadFromOpenAlex(doi: string): Promise<DownloadResult | null> {
+  try {
+    const url = `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}` +
+      `?select=title,open_access,best_oa_location,locations,authorships,publication_year` +
+      `&mailto=${process.env.UNPAYWALL_EMAIL || 'user@scholarlink.app'}`;
+
+    const res = await axios.get(url, { timeout: 15000 });
+    const data = res.data;
+
+    // 모든 위치에서 pdf_url 수집 (best_oa_location 우선)
+    const candidates: string[] = [];
+    const best = data.best_oa_location;
+    if (best?.pdf_url) candidates.push(best.pdf_url);
+    if (data.open_access?.oa_url && !candidates.includes(data.open_access.oa_url)) {
+      candidates.push(data.open_access.oa_url);
+    }
+    for (const loc of (data.locations || []) as { pdf_url?: string; is_oa?: boolean }[]) {
+      if (loc.pdf_url && loc.is_oa && !candidates.includes(loc.pdf_url)) {
+        candidates.push(loc.pdf_url);
+      }
+    }
+
+    for (const pdfUrl of candidates) {
+      try {
+        const result = await downloadFileFromUrl(pdfUrl, doi);
+        if (result) {
+          const authors = ((data.authorships || []) as { author?: { display_name?: string } }[])
+            .slice(0, 3).map((a) => a.author?.display_name || '').filter(Boolean).join(', ');
+          return {
+            ...result,
+            title: data.title || undefined,
+            authors: authors || undefined,
+            year: data.publication_year || undefined,
+          };
+        }
+      } catch { /* 다음 URL 시도 */ }
+    }
+    return null;
+  } catch (err) {
+    const msg = (err as { response?: { status?: number } }).response?.status;
+    if (msg === 404) return null; // 논문 없음
+    throw err;
+  }
+}
+
 async function downloadFromUnpaywall(doi: string): Promise<DownloadResult | null> {
   const email = process.env.UNPAYWALL_EMAIL;
   if (!email) { console.log('[unpaywall] UNPAYWALL_EMAIL not set. Skipping.'); return null; }
@@ -851,6 +897,7 @@ export async function downloadPaper(
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
+    ['OpenAlex',         () => downloadFromOpenAlex(doi)],
     ['Unpaywall',        () => downloadFromUnpaywall(doi)],
     ['Semantic Scholar', () => downloadFromSemanticScholar(doi)],
     ['Europe PMC',       () => downloadFromEuropePMC(doi)],

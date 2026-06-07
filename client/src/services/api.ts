@@ -13,7 +13,10 @@ export function getApiBaseURL(): string { return baseURL; }
 async function initApiConfig() {
   try {
     // Load config from public/api-config.json (deployed with the app)
-    const res = await fetch(import.meta.env.BASE_URL + 'api-config.json?v=' + Date.now(), { cache: 'no-store' });
+    const ctrl = new AbortController();
+    const fetchTimer = setTimeout(() => ctrl.abort(), 5000); // 5s timeout
+    const res = await fetch(import.meta.env.BASE_URL + 'api-config.json?v=' + Date.now(), { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(fetchTimer);
     if (res.ok) {
       const config = await res.json();
       if (config.backend) {
