@@ -162,7 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_servers_status ON download_servers(status);
 
 -- 기본 서버 데이터 (2026-06 업데이트)
 INSERT INTO download_servers (name, url, type, requires_login, location, notes) VALUES
-  ('Sci-Hub.run',  'https://sci-hub.run',  'scihub',  false, 'International', 'FastAPI 캐시 백엔드(fast.wbleb.com) — 가장 빠름'),
+  ('Sci-Hub.run',  'https://sci-hub.run',  'scihub',  false, 'International', 'FastAPI 캐시 백엔드(fast.wbleb.com) -- 가장 빠름'),
   ('Sci-Hub.sh',   'https://sci-hub.sh',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.wf',   'https://sci-hub.wf',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.ac',   'https://sci-hub.ac',   'scihub',  false, 'International', NULL),
@@ -189,26 +189,37 @@ INSERT INTO ad_banners (title, position, type, icon, message, cta_text, cta_url,
   ),
   (
     'BidVibe 하단 배너', 'BOTTOM', 'IMAGE_TEXT', NULL,
-    '요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼',
+    '요청하면 견적이 다~ 온다 -- 수수료 없는 연구자-공급사 매칭 플랫폼',
     '무료로 시작하기', 'https://ai-traffic.kr', 'BidVibe',
     '#ffffff', '#0f172a', 10
   )
 ON CONFLICT DO NOTHING;
-
--- 배너 문구 최신화 (서버 재시작 시마다 현재 문구로 갱신)
-UPDATE ad_banners
-SET message = '수수료 없는 연구자-공급사 매칭 플랫폼 | 🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료'
-WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)';
-
-UPDATE ad_banners
-SET message = '요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼'
-WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe';
 `;
+
+// 배너 문구 최신화 — 별도 쿼리로 실행 (node-postgres 멀티 스테이트먼트 누락 방지)
+const BANNER_UPDATES = [
+  {
+    sql: `UPDATE ad_banners
+          SET message = $1
+          WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)'`,
+    params: ['수수료 없는 연구자-공급사 매칭 플랫폼 | 🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료'],
+  },
+  {
+    sql: `UPDATE ad_banners
+          SET message = $1
+          WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe'`,
+    params: ['요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼'],
+  },
+];
 
 async function migrate() {
   const client = await pool.connect();
   try {
     await client.query(SQL);
+    for (const { sql, params } of BANNER_UPDATES) {
+      const result = await client.query(sql, params);
+      console.log(`[migrate] banner update rowCount=${result.rowCount}`);
+    }
     console.log('✅ DB 마이그레이션 완료');
   } catch (err) {
     console.error('❌ 마이그레이션 오류:', err);
@@ -223,6 +234,5 @@ migrate()
   .then(() => process.exit(0))
   .catch((err) => {
     console.error('마이그레이션 실패:', err);
-    // 운영 환경에서는 마이그레이션이 실패해도(예: 이미 적용됨) 서버는 시작하도록 exit 0
     process.exit(0);
   });
