@@ -8,9 +8,12 @@ const STATUS_CONFIG = {
   SLOW:     { dot: 'bg-orange-400', label: 'Slow',     text: 'text-orange-700' },
   CHECKING: { dot: 'bg-yellow-400', label: 'Checking', text: 'text-yellow-700' },
   OFFLINE:  { dot: 'bg-red-500',    label: 'Offline',  text: 'text-red-700'    },
-  BLOCKED:  { dot: 'bg-slate-500',  label: 'Blocked',  text: 'text-slate-700'  },
+  BLOCKED:  { dot: 'bg-green-400',  label: 'Online',   text: 'text-green-600'  },
   HIDDEN:   { dot: 'bg-slate-200',  label: 'Hidden',   text: 'text-slate-500'  },
 };
+
+// BLOCKED = 서버가 살아있지만 데이터센터 IP 차단 → 사용자 브라우저에서는 정상 접속 가능
+const ONLINE_STATUSES = ['ONLINE', 'SLOW', 'BLOCKED'];
 
 const TYPE_BADGE: Record<string, string> = {
   scihub:   'bg-blue-50 text-blue-600 border-blue-100',
@@ -87,7 +90,7 @@ export default function ServerStatus({ compact = false }: { compact?: boolean })
     );
   }
 
-  const onlineCount = servers.filter(s => s.status === 'ONLINE' || s.status === 'SLOW').length;
+  const onlineCount = servers.filter(s => ONLINE_STATUSES.includes(s.status)).length;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
