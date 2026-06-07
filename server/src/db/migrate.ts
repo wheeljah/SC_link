@@ -168,18 +168,25 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('Sci-Hub.ac',   'https://sci-hub.ac',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.st',   'https://sci-hub.st',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.ee',   'https://sci-hub.ee',   'scihub',  false, 'Europe',        'EU 최적화 미러'),
+  ('Sci-Hub.ru',   'https://sci-hub.ru',   'scihub',  false, 'Russia',        'Russia 최적화 미러 — 안정적'),
+  ('Sci-Hub.al',   'https://sci-hub.al',   'scihub',  false, 'International', '2026 신규 미러 (Albania TLD)'),
+  ('Sci-Hub.mk',   'https://sci-hub.mk',   'scihub',  false, 'International', '2026 신규 미러 (North Macedonia TLD)'),
   ('LibGen.li',    'http://libgen.li',      'libgen',  false, 'International', NULL),
   ('LibGen.rs',    'https://libgen.rs',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('LibGen.st',    'https://libgen.st',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('LibGen.is',    'https://libgen.is',     'libgen',  false, 'International', 'scimag 엔드포인트'),
+  ('LibGen.bz',    'https://libgen.bz',     'libgen',  false, 'International', 'scimag 엔드포인트'),
+  ('LibGen.vg',    'https://libgen.vg',     'libgen',  false, 'International', 'scimag 엔드포인트'),
+  ('LibGen.gl',    'https://libgen.gl',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('Library.lol',  'https://library.lol',   'libgen',  false, 'International', 'libgen 직접 다운로드 프록시'),
   ('BookSC.org',   'https://booksc.org',    'libgen',  false, 'International', NULL),
   ('Z-Library (singlelogin)', 'https://singlelogin.re', 'zlibrary', true, 'International', '계정 필요'),
-  ('Anna''s Archive', 'https://annas-archive.org', 'archive', false, 'International', NULL),
+  ('Anna''s Archive .gl', 'https://annas-archive.gl', 'archive', false, 'International', 'annas-archive.org 차단(Jan 2026) 후 대체 미러'),
+  ('Anna''s Archive .gd', 'https://annas-archive.gd', 'archive', false, 'International', 'Anna Archive 미러 (2026)'),
   ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요')
 ON CONFLICT DO NOTHING;
 
--- 기본 광고 배너 (ai-traffic.kr / BidVibe)
+-- 광고 배너
 INSERT INTO ad_banners (title, position, type, icon, message, cta_text, cta_url, advertiser_name, bg_color, text_color, priority) VALUES
   (
     'BidVibe 상단 배너', 'TOP', 'TEXT', NULL,
@@ -196,17 +203,32 @@ INSERT INTO ad_banners (title, position, type, icon, message, cta_text, cta_url,
 ON CONFLICT DO NOTHING;
 `;
 
-// 배너 문구 최신화 — 별도 쿼리로 실행 (node-postgres 멀티 스테이트먼트 누락 방지)
-const BANNER_UPDATES = [
+// ── 런타임 업데이트 ─────────────────────────────────────────────────────────
+// INSERT의 ON CONFLICT DO NOTHING으로 처리 안 되는 기존 레코드 수정 사항
+const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
+  // sci-hub.se: 2026년 1월 Swedish registrar에 의해 차단됨 → 비활성화
   {
-    sql: `UPDATE ad_banners
-          SET message = $1
+    sql: `UPDATE download_servers SET is_active = false
+          WHERE url = 'https://sci-hub.se'`,
+    params: [],
+  },
+  // annas-archive.org: 2026년 1월 registrar 차단 → .gl 미러 URL로 교체
+  {
+    sql: `UPDATE download_servers
+          SET url = 'https://annas-archive.gl',
+              name = 'Anna''s Archive .gl',
+              notes = 'annas-archive.org 차단(Jan 2026) → .gl 미러로 교체'
+          WHERE url LIKE '%annas-archive.org%'`,
+    params: [],
+  },
+  // 배너 문구 최신화
+  {
+    sql: `UPDATE ad_banners SET message = $1
           WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)'`,
     params: ['수수료 없는 연구자-공급사 매칭 플랫폼 | 🔒 연구자 완전 무료 | 🎁 공급자 얼리버드 처음 20개사 Pro 1개월 무료'],
   },
   {
-    sql: `UPDATE ad_banners
-          SET message = $1
+    sql: `UPDATE ad_banners SET message = $1
           WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe'`,
     params: ['요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭 플랫폼'],
   },
@@ -216,9 +238,9 @@ async function migrate() {
   const client = await pool.connect();
   try {
     await client.query(SQL);
-    for (const { sql, params } of BANNER_UPDATES) {
+    for (const { sql, params } of RUNTIME_UPDATES) {
       const result = await client.query(sql, params);
-      console.log(`[migrate] banner update rowCount=${result.rowCount}`);
+      console.log(`[migrate] update rowCount=${result.rowCount} — ${sql.slice(0, 60).replace(/\n/g, ' ')}...`);
     }
     console.log('✅ DB 마이그레이션 완료');
   } catch (err) {

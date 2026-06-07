@@ -529,16 +529,18 @@ async function downloadFromLibGen(doi: string, server: ServerInfo): Promise<Down
 }
 
 // ─── Anna's Archive ───────────────────────────────────────────────────────────
-async function downloadFromAnnasArchive(doi: string, _server: ServerInfo): Promise<DownloadResult | null> {
+// annas-archive.org는 2026년 1월 차단됨 — server.url 사용 (.gl/.gd 미러)
+async function downloadFromAnnasArchive(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
+  const base = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
   try {
-    const searchUrl = `https://annas-archive.org/search?q=${encodeURIComponent(doi)}&content_type=pdf`;
+    const searchUrl = `${base}/search?q=${encodeURIComponent(doi)}&content_type=pdf`;
     const pageHtml = await cloudscraper.get(searchUrl) as string;
     const $ = cheerio.load(pageHtml);
 
     const firstResult = $('a[href*="/md5/"]').first().attr('href');
     if (!firstResult) return null;
 
-    const md5PageUrl = `https://annas-archive.org${firstResult}`;
+    const md5PageUrl = firstResult.startsWith('http') ? firstResult : `${base}${firstResult}`;
     const md5Html = await cloudscraper.get(md5PageUrl) as string;
     const $$ = cheerio.load(md5Html);
 
@@ -546,7 +548,7 @@ async function downloadFromAnnasArchive(doi: string, _server: ServerInfo): Promi
     if (!dlLink) dlLink = $$('a[href*=".pdf"]').first().attr('href');
     if (!dlLink) return null;
 
-    const pdfUrl = dlLink.startsWith('http') ? dlLink : `https://annas-archive.org${dlLink}`;
+    const pdfUrl = dlLink.startsWith('http') ? dlLink : `${base}${dlLink}`;
     return await downloadFileFromUrl(pdfUrl, doi, 'annas_');
   } catch {
     return null;
