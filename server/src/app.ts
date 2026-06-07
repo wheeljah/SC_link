@@ -49,7 +49,7 @@ app.use(cors({
     ) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Blocked origin: ${origin}`);
+      console.warn('[CORS] Blocked origin: ' + origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -59,6 +59,11 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// health check: rate limiter 앞에 등록 (Render 반복 요청이 429에 걸리지 않게)
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/', (_req, res) => res.json({ service: 'ScholarLink API', status: 'running' }));
+
 app.use('/api', generalLimiter);
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || './uploads')));
 
@@ -68,17 +73,27 @@ app.use('/api/v1/papers', paperRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/ads', adRoutes);
 
-// 헬스체크 — Render가 5초 안에 이 응답을 받아야 배포 성공
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-app.get('/', (req, res) => res.json({ service: 'ScholarLink API', status: 'running' }));
-
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  res.status(500).json({ success: false, message: 'Server error' });
 });
 
+// listen 먼저 -> health check 즉시 응답 -> migrate 백그라운드 실행
 app.listen(PORT, () => {
-  console.log(`🚀 ScholarLink API 서버 시작: http://localhost:${PORT}`);
+  console.log('ScholarLink API started on port ' + PORT);
+
+  void (async () => {
+    const timer = setTimeout(() => console.warn('[migrate] timeout'), 20000);
+    try {
+      const { migrate } = await import('./db/migrate');
+      await migrate();
+      console.log('[migrate] done');
+    } catch (e) {
+      console.warn('[migrate] skipped:', (e as Error).message);
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
 });
 
 export default app;

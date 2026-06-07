@@ -15,7 +15,7 @@ services:
     rootDir: server
     # devDependencies까지 설치(타입 정의 필요) → 빌드 → 마이그레이션은 start에서
     buildCommand: npm install --include=dev && npm run build
-    startCommand: npm run start:prod
+    startCommand: node dist/app.js
     healthCheckPath: /api/health
     envVars:
       # 빌드 시 devDependencies(@types/*) 설치 보장

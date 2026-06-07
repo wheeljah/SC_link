@@ -251,13 +251,18 @@ async function migrate() {
     throw err;
   } finally {
     client.release();
-    await pool.end();
+    // pool.end()는 CLI 직접 실행 시에만 호출 (app.ts import 시엔 pool 유지)
+    if (require.main === module) await pool.end();
   }
 }
 
-migrate()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error('마이그레이션 실패:', err);
-    process.exit(0);
-  });
+// CLI로 직접 실행 시 자동 실행 (app.ts에서 import 시엔 실행 안 됨)
+export { migrate };
+
+// node dist/db/migrate.js 로 직접 실행할 때
+const isMain = require.main === module;
+if (isMain) {
+  migrate()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(0));
+}

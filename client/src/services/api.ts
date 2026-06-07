@@ -38,7 +38,7 @@ async function initApiConfig() {
 export const initPromise = initApiConfig();
 
 // No static baseURL — set dynamically in interceptor after initPromise resolves
-const api = axios.create({ withCredentials: true });
+const api = axios.create({ withCredentials: true, timeout: 20000 }); // 20s — Render free tier spin-up 고려
 
 api.interceptors.request.use(async (config) => {
   await initPromise; // wait for api-config.json to load (no-op on subsequent calls)
@@ -51,6 +51,9 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      return Promise.reject(new Error('서버 응답 시간 초과. 잠시 후 다시 시도해주세요. (Render 무료 플랜은 첫 요청 시 30초가 소요될 수 있습니다.)'));
+    }
     if (err.response?.status === 401) {
       const url = err.config?.url || '';
       // 로그인/회원가입 요청 자체의 401은 리다이렉트 제외 — 화면에서 에러 메시지 표시
