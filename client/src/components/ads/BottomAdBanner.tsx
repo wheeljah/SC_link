@@ -25,7 +25,7 @@ export default function BottomAdBanner() {
           className="w-12 h-12 rounded-xl object-contain shrink-0 hidden sm:block border border-slate-100 p-1"
         />
       ) : banner.advertiser_name ? (
-        <div className="w-12 h-12 rounded-xl bg-slate-900 flex flex-col items-center justify-center shrink-0 leading-none gap-0.5">
+        <div className="hidden sm:flex w-12 h-12 rounded-xl bg-slate-900 flex-col items-center justify-center shrink-0 leading-none gap-0.5">
           <span className="text-white text-[11px] font-black tracking-tight block text-center">비드</span>
           <span className="text-white text-[11px] font-black tracking-tight block text-center">바이브</span>
         </div>
@@ -34,9 +34,9 @@ export default function BottomAdBanner() {
       {/* 텍스트 영역 */}
       <div className="flex-1 min-w-0">
         {banner.advertiser_name && (
-          <p className="text-xs font-bold text-slate-900">{banner.advertiser_name}</p>
+          <p className="hidden sm:block text-xs font-bold text-slate-900">{banner.advertiser_name}</p>
         )}
-        <p className="text-xs text-slate-600 leading-snug">{banner.message}</p>
+        <p className="text-base sm:text-xs font-bold sm:font-normal text-slate-800 sm:text-slate-600 leading-tight">{banner.message}</p>
       </div>
 
       {/* CTA 버튼 */}

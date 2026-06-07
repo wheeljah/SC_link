@@ -25,7 +25,7 @@ export default function TopAdBanner() {
     >
       {/* 중앙 콘텐츠 */}
       <div className="flex-1 flex items-center justify-center min-w-0">
-        {/* 모바일: 브랜드명 + 슬로건 두 줄 */}
+        {/* 모바일: 브랜드명 + 메시지 두 줄 */}
         <div className="flex flex-col items-center sm:hidden leading-tight">
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold border border-white/40 text-white/70 rounded px-1 leading-none">
@@ -35,9 +35,7 @@ export default function TopAdBanner() {
               <span className="text-white font-bold text-sm">{banner.advertiser_name}</span>
             )}
           </div>
-          {hasTwo && (
-            <span className="text-white/90 text-xs">{right}</span>
-          )}
+          <span className="text-white/90 text-xs">{hasTwo ? right : banner.message}</span>
         </div>
 
         {/* 데스크톱: 한 줄 */}
