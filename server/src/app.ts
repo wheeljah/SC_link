@@ -16,8 +16,7 @@ import morgan from 'morgan';
 import path from 'path';
 
 import { generalLimiter } from './middleware/rateLimit';
-import { startMonitoringCron } from './services/serverMonitorService';
-import { checkAllServers } from './services/serverMonitorService';
+import { startMonitoringCron, checkAllServers } from './services/serverMonitorService';
 
 import authRoutes from './routes/auth';
 import serverRoutes from './routes/servers';
@@ -31,13 +30,12 @@ const PORT = parseInt(process.env.PORT || '4000');
 // 보안 미들웨어
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-// CORS: allow localhost dev + GitHub Pages + Render + ngrok
+// CORS
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://wheeljah.github.io',        // GitHub Pages (origin은 호스트까지만)
+  'https://wheeljah.github.io',
 ];
-// 환경변수로 추가 origin 허용 (콤마 구분)
 if (process.env.APP_URL) {
   try { allowedOrigins.push(new URL(process.env.APP_URL).origin); } catch { /* ignore */ }
 }
@@ -47,8 +45,6 @@ if (process.env.CORS_EXTRA_ORIGINS) {
 
 app.use(cors({
   origin: (origin, callback) => {
-    // origin 없음(curl/모바일) 허용, 화이트리스트 허용,
-    // *.onrender.com / *.ngrok-free.(app|dev) 패턴 허용
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
@@ -73,7 +69,7 @@ app.use(express.urlencoded({ extended: true }));
 // Rate limiting
 app.use('/api', generalLimiter);
 
-// 정적 파일 서빙 (업로드 파일)
+// 정적 파일 서빙
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || './uploads')));
 
 // API 라우터
@@ -83,10 +79,10 @@ app.use('/api/v1/papers', paperRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/ads', adRoutes);
 
-// 헬스체크 (Render healthCheckPath + 슬립 방지 cron 대상)
+// 헬스체크 — Render가 5초 안에 이 응답을 받아야 배포 성공
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-// 루트 — Render 슬립 방지 핑 및 동작 확인용
+// 루트
 app.get('/', (req, res) => res.json({ service: 'ScholarLink API', status: 'running' }));
 
 // 에러 핸들러
@@ -95,11 +91,14 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
 });
 
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`🚀 ScholarLink API 서버 시작: http://localhost:${PORT}`);
-  // 시작 시 서버 상태 즉시 체크
-  try { await checkAllServers(); } catch { /* 시작 시 실패해도 계속 */ }
   startMonitoringCron();
+
+  // 서버 체크는 10초 뒤 백그라운드 실행 — health check 응답 절대 차단 안 함
+  setTimeout(() => {
+    checkAllServers().catch((e) => console.error('[startup check]', e));
+  }, 10_000);
 });
 
 export default app;
