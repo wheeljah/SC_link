@@ -5,6 +5,14 @@ import { pool } from '../db/pool';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService';
 import { signToken, AuthRequest } from '../middleware/auth';
 
+/** 이메일 발송에 타임아웃 적용 (15초 초과 시 오류 대신 경고만 남김) */
+async function sendVerificationEmailWithTimeout(email: string, token: string): Promise<string | null> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('이메일 발송 타임아웃 (15s)')), 15000)
+  );
+  return Promise.race([sendVerificationEmail(email, token), timeout]);
+}
+
 export async function register(req: Request, res: Response): Promise<void> {
   const { email, password, nickname } = req.body;
 
@@ -44,9 +52,10 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   let previewUrl: string | null = null;
   try {
-    previewUrl = await sendVerificationEmail(email, token);
+    previewUrl = await sendVerificationEmailWithTimeout(email, token);
   } catch (err) {
-    console.error('이메일 발송 오류:', err);
+    console.error('이메일 발송 오류 (회원가입 계속 진행):', err);
+    // 이메일 실패해도 계정은 생성됨 — 재발송 안내
   }
 
   res.status(201).json({
@@ -55,7 +64,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       ? '인증 이메일을 발송했습니다. 받은 편지함을 확인해주세요.'
       : '테스트 메일을 발송했습니다. 아래 미리보기 링크에서 확인하세요.',
     devMode: !isGmail,
-    previewUrl, // Ethereal 미리보기 URL (Gmail 사용 시 null)
+    previewUrl,
   });
 }
 
@@ -116,7 +125,11 @@ export async function resendVerification(req: Request, res: Response): Promise<v
     `INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
     [rows[0].id, token]
   );
-  await sendVerificationEmail(email, token);
+  try {
+    await sendVerificationEmailWithTimeout(email, token);
+  } catch (err) {
+    console.error('인증 메일 재발송 오류:', err);
+  }
   res.json({ success: true, message: '인증 이메일을 재발송했습니다.' });
 }
 

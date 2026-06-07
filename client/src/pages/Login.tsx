@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [needVerify, setNeedVerify] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,6 +19,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setNeedVerify(false);
+    setResendStatus('idle');
     setLoading(true);
     try {
       await login(email, password);
@@ -27,6 +30,16 @@ export default function Login() {
       if (err.response?.data?.needVerification) setNeedVerify(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendStatus('sending');
+    try {
+      await api.post('/auth/resend-verification', { email });
+      setResendStatus('sent');
+    } catch {
+      setResendStatus('error');
     }
   };
 
@@ -72,11 +85,24 @@ export default function Login() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
-              {error}
+              <p>{error}</p>
               {needVerify && (
-                <span className="ml-1">
-                  <Link to="/resend-verification" className="underline">인증 메일 재발송</Link>
-                </span>
+                <div className="mt-2">
+                  {resendStatus === 'sent' ? (
+                    <p className="text-green-700 text-xs">✅ 인증 메일을 재발송했습니다. 받은 편지함을 확인하세요.</p>
+                  ) : resendStatus === 'error' ? (
+                    <p className="text-red-600 text-xs">발송 실패. 잠시 후 다시 시도해주세요.</p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resendStatus === 'sending'}
+                      className="text-xs text-blue-700 underline disabled:opacity-50"
+                    >
+                      {resendStatus === 'sending' ? '발송 중...' : '인증 메일 재발송'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}

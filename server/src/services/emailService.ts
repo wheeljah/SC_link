@@ -17,6 +17,9 @@ const gmailTransporter = isGmailConfigured
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      connectionTimeout: 10000,   // 10s: TCP 연결
+      greetingTimeout:  10000,    // 10s: SMTP 핸드셰이크
+      socketTimeout:    15000,    // 15s: 데이터 전송
     })
   : null;
 
@@ -33,6 +36,9 @@ async function getEtherealTransporter(): Promise<nodemailer.Transporter> {
     port: 587,
     secure: false,
     auth: { user: account.user, pass: account.pass },
+    connectionTimeout: 10000,
+    greetingTimeout:  10000,
+    socketTimeout:    15000,
   });
   console.log('\n📮 Ethereal 테스트 메일 계정 생성됨');
   console.log(`   ID: ${account.user}`);
