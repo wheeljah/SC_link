@@ -105,8 +105,21 @@ async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Pr
     const stat = fs.statSync(filePath);
     if (stat.size < 5000) {
       fs.unlinkSync(filePath);
+      console.log(`[download] file too small (${stat.size}b), skipping`);
       return null;
     }
+
+    // PDF 매직바이트 검증 (%PDF-)
+    const fd = fs.openSync(filePath, 'r');
+    const magic = Buffer.alloc(5);
+    fs.readSync(fd, magic, 0, 5, 0);
+    fs.closeSync(fd);
+    if (magic.toString('ascii') !== '%PDF-') {
+      fs.unlinkSync(filePath);
+      console.log(`[download] not a real PDF (magic=${magic.toString('ascii').replace(/\n/g,'')}) — likely HTML page`);
+      return null;
+    }
+
     return { filePath: `/uploads/${filename}`, fileSize: stat.size };
   } catch (e) {
     if (axios.isAxiosError(e)) {
@@ -578,6 +591,7 @@ async function downloadFromLibGen(doi: string, server: ServerInfo): Promise<Down
 async function downloadFromAnnasArchive(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
   const base = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
   try {
+    // 1단계: DOI로 검색
     const searchUrl = `${base}/search?q=${encodeURIComponent(doi)}&content_type=pdf`;
     const pageHtml = await cloudscraper.get(searchUrl) as string;
     const $ = cheerio.load(pageHtml);
@@ -589,12 +603,30 @@ async function downloadFromAnnasArchive(doi: string, server: ServerInfo): Promis
     const md5Html = await cloudscraper.get(md5PageUrl) as string;
     const $$ = cheerio.load(md5Html);
 
-    let dlLink = $$('a[href*="/download/"]').first().attr('href');
-    if (!dlLink) dlLink = $$('a[href*=".pdf"]').first().attr('href');
-    if (!dlLink) return null;
+    // 2단계: 직접 다운로드 링크 수집 (우선순위순)
+    const candidates: string[] = [];
 
-    const pdfUrl = dlLink.startsWith('http') ? dlLink : `${base}${dlLink}`;
-    return await downloadFileFromUrl(pdfUrl, doi, 'annas_');
+    // fast_download (직접 PDF, 가장 신뢰도 높음)
+    $$('a[href*="/fast_download/"]').each((_: number, el: Parameters<typeof $$>[0]) => {
+      const href = $$(el).attr('href');
+      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
+    });
+    // /download/ 링크
+    $$('a[href*="/download/"]').each((_: number, el: Parameters<typeof $$>[0]) => {
+      const href = $$(el).attr('href');
+      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
+    });
+    // .pdf 직접 링크
+    $$('a[href$=".pdf"]').each((_: number, el: Parameters<typeof $$>[0]) => {
+      const href = $$(el).attr('href');
+      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
+    });
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'annas_');
+      if (result) return result;
+    }
+    return null;
   } catch {
     return null;
   }
