@@ -24,12 +24,27 @@ const PROTECTION_KEYWORDS = [
   'Please wait while we check your browser',
 ];
 
-async function checkServer(server: ServerRow): Promise<{ status: ServerStatus; latency: number }> {
-  // sci-hub.run: 프론트는 CF로 차단될 수 있으므로 FastAPI 백엔드를 직접 확인
-  const checkUrl = server.url.includes('sci-hub.run')
-    ? 'https://fast.wbleb.com/'
-    : server.url;
+/**
+ * 서버 타입·URL에 맞는 헬스체크 URL 반환.
+ * - sci-hub.run: CF 차단 우려 → FastAPI 백엔드 직접 확인
+ * - libgen.*: 홈페이지보다 /json.php?ids=1 JSON API가 훨씬 빠르고 안정적
+ * - 나머지: 서버 URL 그대로 사용
+ */
+function getCheckUrl(server: ServerRow): string {
+  if (server.url.includes('sci-hub.run')) {
+    return 'https://fast.wbleb.com/';
+  }
+  if (
+    server.type === 'libgen' &&
+    /libgen\.(rs|st|is|li|bz|vg|gl|la|im|fun|rocks)/.test(server.url)
+  ) {
+    return `${server.url.replace(/\/$/, '')}/json.php?ids=1&fields=id`;
+  }
+  return server.url;
+}
 
+async function checkServer(server: ServerRow): Promise<{ status: ServerStatus; latency: number }> {
+  const checkUrl = getCheckUrl(server);
   const start = Date.now();
 
   const doRequest = async () =>
@@ -110,7 +125,7 @@ export async function checkAllServers(): Promise<void> {
 }
 
 export function startMonitoringCron(): void {
-  // Sci-Hub: 5분, LibGen/Archive: 10분, Z-Library: 15분
+  // Sci-Hub: 5분, LibGen/Archive: 10분, Z-Library/IA: 15분
   cron.schedule('*/5 * * * *', async () => {
     const { rows } = await pool.query<ServerRow>(
       `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type = 'scihub'`
@@ -123,7 +138,7 @@ export function startMonitoringCron(): void {
 
   cron.schedule('*/10 * * * *', async () => {
     const { rows } = await pool.query<ServerRow>(
-      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type IN ('libgen','archive','library','ia')`
+      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type IN ('libgen','archive','library')`
     );
     await Promise.allSettled(rows.map(async (s) => {
       const r = await checkServer(s);
@@ -133,7 +148,7 @@ export function startMonitoringCron(): void {
 
   cron.schedule('*/15 * * * *', async () => {
     const { rows } = await pool.query<ServerRow>(
-      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type = 'zlibrary'`
+      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type IN ('zlibrary','ia')`
     );
     await Promise.allSettled(rows.map(async (s) => {
       const r = await checkServer(s);
