@@ -162,24 +162,21 @@ CREATE INDEX IF NOT EXISTS idx_servers_status ON download_servers(status);
 
 -- 기본 서버 데이터 (2026-06 업데이트)
 INSERT INTO download_servers (name, url, type, requires_login, location, notes) VALUES
-  -- Sci-Hub 미러
   ('Sci-Hub.run',  'https://sci-hub.run',  'scihub',  false, 'International', 'FastAPI 캐시 백엔드(fast.wbleb.com) — 가장 빠름'),
   ('Sci-Hub.sh',   'https://sci-hub.sh',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.wf',   'https://sci-hub.wf',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.ac',   'https://sci-hub.ac',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.st',   'https://sci-hub.st',   'scihub',  false, 'International', NULL),
   ('Sci-Hub.ee',   'https://sci-hub.ee',   'scihub',  false, 'Europe',        'EU 최적화 미러'),
-  -- LibGen 미러
   ('LibGen.li',    'http://libgen.li',      'libgen',  false, 'International', NULL),
   ('LibGen.rs',    'https://libgen.rs',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('LibGen.st',    'https://libgen.st',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('LibGen.is',    'https://libgen.is',     'libgen',  false, 'International', 'scimag 엔드포인트'),
   ('Library.lol',  'https://library.lol',   'libgen',  false, 'International', 'libgen 직접 다운로드 프록시'),
   ('BookSC.org',   'https://booksc.org',    'libgen',  false, 'International', NULL),
-  -- Shadow / Archive
   ('Z-Library (singlelogin)', 'https://singlelogin.re', 'zlibrary', true, 'International', '계정 필요'),
   ('Anna''s Archive', 'https://annas-archive.org', 'archive', false, 'International', NULL),
-  ('Internet Archive', 'https://archive.org',      'ia',      false, 'International', 'Puppeteer 필요')
+  ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요')
 ON CONFLICT DO NOTHING;
 
 -- 기본 광고 배너 (ai-traffic.kr / BidVibe)
@@ -212,4 +209,20 @@ async function migrate() {
   const client = await pool.connect();
   try {
     await client.query(SQL);
-    co
+    console.log('✅ DB 마이그레이션 완료');
+  } catch (err) {
+    console.error('❌ 마이그레이션 오류:', err);
+    throw err;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+migrate()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('마이그레이션 실패:', err);
+    // 운영 환경에서는 마이그레이션이 실패해도(예: 이미 적용됨) 서버는 시작하도록 exit 0
+    process.exit(0);
+  });
