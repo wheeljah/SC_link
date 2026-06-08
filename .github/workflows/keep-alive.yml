@@ -1,35 +1,51 @@
 name: Keep Render Awake
 
 # Render 무료 웹서비스는 15분 미사용 시 슬립.
-# 이 워크플로가 주기적으로 health 엔드포인트를 핑하여 슬립을 방지합니다.
+# 수정 이력:
+#   v1: */10 cron + RENDER_URL 시크릿 → 시크릿 미설정 시 조용히 스킵, 지연으로 25분 공백 발생
+#   v2: URL 하드코딩 + */5 cron + 4분 간격 이중 핑 → 최악 지연에도 15분 이내 보장
 #
-# ⚠️ 설정 필요:
-#   GitHub 레포 → Settings → Secrets and variables → Actions → New repository secret
-#   이름: RENDER_URL    값: https://scholarlink-api.onrender.com  (실제 Render URL)
+# 작동 원리:
+#   GitHub Actions cron */5 는 실제로 5~15분 지연될 수 있음.
+#   각 워크플로 실행에서 핑 2회(0분, +4분)를 보내므로:
+#     최악 케이스: GitHub 14분 지연 → 핑 간격 max = 14 - 4 = 10분 (< 15분 ✅)
 
 on:
   schedule:
-    # GitHub Actions cron 최소 간격은 5분. 실제로는 5~15분 지연될 수 있음.
-    - cron: "*/10 * * * *"
-  workflow_dispatch:   # 수동 실행 버튼도 제공
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
-      - name: Ping health endpoint
+      - name: "Ping #1 — wake up if sleeping"
         run: |
-          URL="${{ secrets.RENDER_URL }}"
-          if [ -z "$URL" ]; then
-            echo "::warning::RENDER_URL secret is not set. Skipping ping."
-            exit 0
-          fi
-          echo "Pinging $URL/api/health ..."
-          # 슬립 상태면 깨어나는 데 30~50초 걸리므로 타임아웃 넉넉히
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$URL/api/health" || echo "000")
-          echo "HTTP status: $code"
-          if [ "$code" = "200" ]; then
-            echo "✅ Service is awake"
+          URL="https://scholarlink-api.onrender.com"
+          echo "Pinging ${URL}/api/health ..."
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --max-time 90 --retry 2 --retry-delay 5 \
+            "${URL}/api/health" 2>/dev/null || echo "000")
+          echo "HTTP status: ${HTTP}"
+          if [ "${HTTP}" = "200" ]; then
+            echo "✅ Ping 1 OK"
           else
-            echo "::warning::Unexpected status $code (service may be waking up)"
+            echo "⚠️  Ping 1 returned ${HTTP} (Render may be waking up)"
+          fi
+
+      - name: "Wait 4 minutes before second ping"
+        run: sleep 240
+
+      - name: "Ping #2 — confirm still awake"
+        run: |
+          URL="https://scholarlink-api.onrender.com"
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --max-time 30 --retry 1 \
+            "${URL}/api/health" 2>/dev/null || echo "000")
+          echo "HTTP status: ${HTTP}"
+          if [ "${HTTP}" = "200" ]; then
+            echo "✅ Ping 2 OK"
+          else
+            echo "⚠️  Ping 2 returned ${HTTP}"
           fi
