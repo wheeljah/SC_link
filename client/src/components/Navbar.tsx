@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
+  const isAdmin = user?.email === 'wheeljah@gmail.com';
   const navigate = useNavigate();
 
   const handleLogout = async () => {

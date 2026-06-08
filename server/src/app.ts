@@ -21,6 +21,7 @@ import paperRoutes from './routes/papers';
 import communityRoutes from './routes/community';
 import adRoutes from './routes/ads';
 import reportRoutes from './routes/reports';
+import adminRoutes from './routes/admin';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000');
@@ -73,6 +74,7 @@ app.use('/api/v1/papers', paperRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/ads', adRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/admin',   adminRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);

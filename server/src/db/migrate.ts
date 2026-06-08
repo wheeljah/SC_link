@@ -252,6 +252,12 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
           WHERE url LIKE '%annas-archive.pm%'`,
     params: [],
   },
+  // booksc.org: Render IP 차단(403 blocked-by-allowlist) — 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false
+          WHERE url LIKE '%booksc.org%'`,
+    params: [],
+  },
   // 배너 문구 최신화
   {
     sql: `UPDATE ad_banners SET message = $1
