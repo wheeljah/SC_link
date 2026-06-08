@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 const CTA_T = '무료로 시작하기';
 const CTA_U = 'https://ai-traffic.kr';
-const MSG   = '요청하면 견적이 다~ 온다 — 수수료 없는 연구자-공급사 매칭';
+const MSG   = '수수료 없는 연구자-공급사 매칭 플랫폼';
 
 export default function BottomAdBanner() {
   useEffect(() => {
