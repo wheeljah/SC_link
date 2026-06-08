@@ -899,10 +899,14 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 export async function downloadPaper(
   doi: string,
   userId: number,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  signal?: { cancelled: boolean }
 ): Promise<DownloadResult> {
 
   const progress = (msg: string) => { onProgress?.(msg); console.log(`[download] ${msg}`); };
+  const checkCancelled = () => {
+    if (signal?.cancelled) throw new Error('검색이 중지되었습니다.');
+  };
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
@@ -915,21 +919,29 @@ export async function downloadPaper(
   ];
 
   for (const [name, fn] of oaSources) {
+    checkCancelled();
     progress(`🔍 ${name} 확인 중...`);
     try {
       const r = await fn();
       if (r) { progress(`✅ ${name} — PDF 확보`); return r; }
       progress(`✗ ${name} — 없음`);
-    } catch { progress(`✗ ${name} — 오류`); }
+    } catch (e) {
+      if ((e as Error).message === '검색이 중지되었습니다.') throw e;
+      progress(`✗ ${name} — 오류`);
+    }
   }
 
   // ─── Phase 1.5: RISS (국내 기관 학술DB, KCI 논문) ──────────────────────────
+  checkCancelled();
   progress(`🔍 RISS 국내 학술DB 확인 중...`);
   try {
     const rissResult = await downloadFromRISS(doi);
     if (rissResult) { progress(`✅ RISS — PDF 확보`); return rissResult; }
     progress(`✗ RISS — 없음`);
-  } catch { progress(`✗ RISS — 오류`); }
+  } catch (e) {
+    if ((e as Error).message === '검색이 중지되었습니다.') throw e;
+    progress(`✗ RISS — 오류`);
+  }
 
   // ─── Phase 2: Sci-Hub.run API (빠른 캐시 우선) ───────────────────────────
   const { rows: runRows } = await pool.query(
@@ -950,6 +962,7 @@ export async function downloadPaper(
   }
 
   // ─── Phase 3: Remaining servers — 전체 순차 시도 ────────────────────────────
+  checkCancelled();
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
 
@@ -971,6 +984,7 @@ export async function downloadPaper(
   progress(`📋 ${remaining.length}개 서버 순차 시도 시작...`);
 
   for (const server of remaining) {
+    checkCancelled();
     progress(`🔍 ${server.name} 확인 중...`);
     let result: DownloadResult | null = null;
 

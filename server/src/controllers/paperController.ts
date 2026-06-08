@@ -66,6 +66,10 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
 
   send('progress', { step: 'parsing', message: 'DOI 분석 중...', progress: 20 });
 
+  // 클라이언트 연결 끊기면 cancelled 플래그 설정
+  const cancelled = { cancelled: false };
+  req.on('close', () => { cancelled.cancelled = true; });
+
   try {
     if (parsed.type === 'title') {
       send('progress', { step: 'resolving', message: 'Semantic Scholar / CrossRef DOI 조회 중...', progress: 25 });
@@ -75,7 +79,7 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
     // 메타데이터 조회 + 다운로드 병렬 실행
     console.log(`[papers] Starting downloadPaper for DOI=${doi}, userId=${req.userId}`);
     const [result, meta] = await Promise.all([
-      downloadPaper(doi, req.userId!, (msg) => { send('log', { message: msg }); }),
+      downloadPaper(doi, req.userId!, (msg) => { send('log', { message: msg }); }, cancelled),
       fetchPaperMetadataFromS2(doi).catch(() => null),
     ]);
     console.log(`[papers] downloadPaper completed: ${result.fileSize} bytes`);

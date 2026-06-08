@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
 import AuthModal from '../components/AuthModal';
@@ -18,9 +18,17 @@ export default function Home() {
   const [error, setError] = useState('');
   const [showAuth, setShowAuth] = useState(false);
   const { isLoggedIn } = useAuth();
+  const abortRef = useRef<AbortController | null>(null);
+
+  const cancelDownload = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
 
   const doDownload = async () => {
     if (!input.trim()) return;
+    const abort = new AbortController();
+    abortRef.current = abort;
     setLoading(true);
     setError('');
     setResult(null);
@@ -36,6 +44,7 @@ export default function Home() {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ input: input.trim() }),
+        signal: abort.signal,
       });
 
       const reader = res.body!.getReader();
@@ -64,9 +73,14 @@ export default function Home() {
           if (event === 'error') setError(payload.message);
         }
       }
-    } catch {
-      setError('다운로드 중 오류가 발생했습니다.');
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') {
+        setError('검색이 중지되었습니다.');
+      } else {
+        setError('다운로드 중 오류가 발생했습니다.');
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
       setProgress(null);
     }
@@ -100,13 +114,23 @@ export default function Home() {
             placeholder="DOI, PMID, arXiv ID, 논문 제목, 또는 저널 URL 입력..."
             className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold px-6 py-3 rounded-xl transition-colors shrink-0"
-          >
-            {loading ? '...' : '다운로드'}
-          </button>
+          {loading ? (
+            <button
+              type="button"
+              onClick={cancelDownload}
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors shrink-0"
+            >
+              검색 중지
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold px-6 py-3 rounded-xl transition-colors shrink-0"
+            >
+              다운로드
+            </button>
+          )}
         </div>
         <p className="text-xs text-slate-400 mt-2 px-1">
           예시: <code className="bg-slate-100 px-1 rounded">10.1038/nature12373</code>
