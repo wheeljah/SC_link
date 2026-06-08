@@ -27,7 +27,7 @@ export default function BottomAdBanner() {
         <span className="w-fit text-[9px] font-bold border border-slate-300 text-slate-400 rounded px-1 leading-tight">
           광고
         </span>
-        <p className="text-[11px] font-bold text-slate-800 leading-snug">{MSG}</p>
+        <p className="text-sm font-bold text-slate-800 leading-snug">{MSG}</p>
       </div>
 
       {/* 오른쪽: CTA 버튼 — shrink-0으로 항상 표시 */}
