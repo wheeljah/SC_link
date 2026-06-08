@@ -36,7 +36,7 @@ export default function BottomAdBanner() {
         {banner.advertiser_name && (
           <p className="hidden sm:block text-xs font-bold text-slate-900">{banner.advertiser_name}</p>
         )}
-        <p className="text-base sm:text-xs font-bold sm:font-normal text-slate-800 sm:text-slate-600 leading-tight">{banner.message}</p>
+        <p className="text-base sm:text-xs font-bold sm:font-normal text-slate-800 sm:text-slate-600 leading-tight break-keep">{banner.message}</p>
       </div>
 
       {/* CTA 버튼 */}
@@ -46,7 +46,7 @@ export default function BottomAdBanner() {
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleCtaClick}
-          className="shrink-0 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          className="hidden sm:inline-block shrink-0 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
         >
           {banner.cta_text}
         </a>

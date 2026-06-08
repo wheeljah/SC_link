@@ -228,12 +228,12 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   {
     sql: `UPDATE ad_banners SET message = $1
           WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)'`,
-    params: ['수수료 없는 연구자-공급사 매칭 플랫폼'],
+    params: ['엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)'],
   },
   {
     sql: `UPDATE ad_banners SET message = $1
           WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe'`,
-    params: ['수수료 없는 연구자-공급사 매칭 플랫폼'],
+    params: ['엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)'],
   },
 ];
 
