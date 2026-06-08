@@ -241,8 +241,17 @@ export default function Home() {
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 &#8212; 브라우저에서 직접 열기</p>
-                <p className="text-xs text-blue-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
+                {directUrl.includes('sci-hub') ? (
+                  <>
+                    <p className="text-sm font-semibold text-blue-800">Sci-Hub 직접 열기</p>
+                    <p className="text-xs text-blue-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요. (sci-hub.kr)</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 &#8212; 브라우저에서 직접 열기</p>
+                    <p className="text-xs text-blue-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
+                  </>
+                )}
               </div>
               <a
                 href={directUrl}

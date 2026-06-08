@@ -991,6 +991,16 @@ export async function downloadPaper(
     progress(`✗ RISS — 오류`);
   }
 
+  // ─── Phase 2/3 비활성화: Render 서버 IP에서 sci-hub/libgen/archive 전부 403 차단 ────
+  // 테스트 결과: sci-hub.*, libgen.*, annas-archive.* 모두 X-Proxy-Error: blocked-by-allowlist
+  // Phase 2 (sci-hub.run API), Phase 3 (병렬 미러 검색) 모두 실패하므로 즉시 directUrl 반환
+  // 사용자 브라우저(실제 IP)로 sci-hub.kr 직접 열기 — 브라우저에서는 접근 가능
+  const scihubDirectUrl = `https://sci-hub.kr/${doi}`;
+  progress(`🔗 OA 없음 — Sci-Hub 직접 열기 제공 (브라우저 사용 권장)`);
+  return { filePath: '', fileSize: 0, directUrl: scihubDirectUrl };
+
+  /* ─── 아래 Phase 2/3 코드는 Render IP 차단으로 비활성화 (재활성화 필요 시 주석 해제) ──
+
   // ─── Phase 2: Sci-Hub.run API (빠른 캐시 우선) ───────────────────────────
   const { rows: runRows } = await pool.query(
     `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
@@ -1102,5 +1112,15 @@ export async function downloadPaper(
     } catch { progress(`✗ ${server.name} — 오류`); }
   }
 
-  throw new Error('PDF를 찾을 수 없습니다. 잠시 후 다시 시도해주세요.');
+  // 모든 서버 실패 — Render IP가 shadow library를 IP 차단함
+  // 사용자 브라우저(IP)로 직접 열기 — sci-hub.kr directUrl 폴백
+  const fallbackUrl = `https://sci-hub.kr/${doi}`;
+  progress(`🔗 서버 IP 제한 — 브라우저 직접 열기 제공: ${fallbackUrl}`);
+  return {
+    filePath: '',
+    fileSize: 0,
+    directUrl: fallbackUrl,
+  };
+
+  */ // end Phase 2/3 disabled block
 }

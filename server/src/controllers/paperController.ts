@@ -107,7 +107,8 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
          title=$1, authors=$2, year=$3, journal=$4 WHERE id=$5`,
         [finalTitle, finalAuthors, finalYear, finalJournal, requestId]
       );
-      send('progress', { step: 'complete', message: '출판사 OA 링크 확인', progress: 100 });
+      const directMsg = result.directUrl?.includes('sci-hub') ? 'Sci-Hub 직접 열기 링크 확인' : '출판사 OA 링크 확인';
+      send('progress', { step: 'complete', message: directMsg, progress: 100 });
       send('complete', {
         requestId,
         doi,
