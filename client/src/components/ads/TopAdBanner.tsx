@@ -25,17 +25,30 @@ export default function TopAdBanner() {
     >
       {/* 중앙 콘텐츠 */}
       <div className="flex-1 flex items-center justify-center min-w-0">
-        {/* 모바일: 브랜드명 + 메시지 두 줄 */}
-        <div className="flex flex-col items-center sm:hidden leading-tight">
+        {/* 모바일: 브랜드명 + 메시지 + CTA */}
+        <div className="flex flex-col items-center sm:hidden leading-tight gap-0.5">
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold border border-white/40 text-white/70 rounded px-1 leading-none">
               광고
             </span>
             {banner.advertiser_name && (
-              <span className="text-white font-bold text-sm">{banner.advertiser_name}</span>
+              <span className="text-white font-bold text-xs">{banner.advertiser_name}</span>
             )}
           </div>
-          <span className="text-white/90 text-xs">{hasTwo ? right : banner.message}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/80 text-[11px] leading-none">{hasTwo ? right : banner.message}</span>
+            {banner.cta_text && banner.cta_url && (
+              <a
+                href={banner.cta_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleCtaClick}
+                className="text-amber-300 text-[11px] font-semibold whitespace-nowrap leading-none"
+              >
+                {banner.cta_text}
+              </a>
+            )}
+          </div>
         </div>
 
         {/* 데스크톱: 한 줄 */}

@@ -5,7 +5,16 @@ export default function BottomAdBanner() {
   const { banner, handleCtaClick } = useAdBanner('BOTTOM');
 
   useEffect(() => {
-    document.body.style.paddingBottom = banner ? '64px' : '0px';
+    if (banner) {
+      // iOS safe-area-inset-bottom 보상 (홈 인디케이터 아래까지 확보)
+      const safeBottom = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--sab') || '0',
+        10
+      ) || 0;
+      document.body.style.paddingBottom = `${64 + safeBottom}px`;
+    } else {
+      document.body.style.paddingBottom = '0px';
+    }
     return () => { document.body.style.paddingBottom = '0px'; };
   }, [banner]);
 
@@ -15,7 +24,8 @@ export default function BottomAdBanner() {
     <div
       role="complementary"
       aria-label="Advertisement"
-      className="fixed bottom-0 left-0 right-0 z-[9998] h-[64px] bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center px-3 gap-2"
+      className="fixed bottom-0 left-0 right-0 z-[9998] bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center px-3 gap-2"
+      style={{ minHeight: 64, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* 광고주 로고 — 데스크탑만 */}
       {banner.advertiser_name && (
