@@ -1009,54 +1009,90 @@ export async function downloadPaper(
     progress(`✗ Sci-Hub API — 없음`);
   }
 
-  // ─── Phase 3: Remaining servers — 전체 순차 시도 ────────────────────────────
+  // ─── Phase 3: 병렬 검색 (Sci-Hub / LibGen / Anna's Archive) ─────────────────
   checkCancelled();
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
 
-  // 시도 순서: 책 챕터이면 Anna's Archive 우선, 그 다음 Sci-Hub → LibGen
+  // booksc.org: 도서(책 챕터)만 시도 — 논문은 스킵
   const remaining = servers
     .filter(s => !s.url.includes('sci-hub.run'))
     .filter(s => !(skipSciHub && s.type === 'scihub'))
-    .sort((a, b) => {
-      if (isBookChapter) {
-        const priority: Record<string, number> = { archive: 0, libgen: 1, scihub: 2, zlibrary: 3, ia: 4 };
-        return (priority[a.type] ?? 5) - (priority[b.type] ?? 5);
+    .filter(s => !(s.url.includes('booksc.org') && !isBookChapter));
+
+  // 타입별 버킷 — 각 라운드마다 1개씩 꺼내 병렬 경쟁
+  const shBucket    = remaining.filter(s => s.type === 'scihub');
+  const lgBucket    = remaining.filter(s => s.type === 'libgen');
+  const aaBucket    = remaining.filter(s => s.type === 'archive');
+  const otherBucket = remaining.filter(s => !['scihub', 'libgen', 'archive'].includes(s.type));
+
+  const tryServer = async (server: ServerInfo): Promise<DownloadResult | null> => {
+    if (server.type === 'scihub')   return downloadFromSciHub(doi, server);
+    if (server.type === 'libgen')   return downloadFromLibGen(doi, server);
+    if (server.type === 'archive')  return downloadFromAnnasArchive(doi, server);
+    if (server.type === 'zlibrary') return downloadFromZlibrary(doi, server, userId);
+    if (server.type === 'ia')       return downloadFromInternetArchive(doi, server);
+    return null;
+  };
+
+  const rounds = Math.max(shBucket.length, lgBucket.length, aaBucket.length, 1);
+  progress(`📋 병렬 검색 시작 (Sci-Hub ${shBucket.length} / LibGen ${lgBucket.length} / Archive ${aaBucket.length})`);
+
+  for (let i = 0; i < rounds; i++) {
+    checkCancelled();
+    // 책 챕터: Archive 우선 / 논문: Sci-Hub 우선
+    const ordered: Array<ServerInfo | undefined> = isBookChapter
+      ? [aaBucket[i],  lgBucket[i], shBucket[i]]
+      : [shBucket[i],  lgBucket[i], aaBucket[i]];
+    const batch = ordered.filter(Boolean) as ServerInfo[];
+    if (batch.length === 0) continue;
+
+    progress(`🔍 병렬 시도: ${batch.map(s => s.name).join(' | ')}`);
+
+    const winner = await new Promise<{ result: DownloadResult; server: ServerInfo } | null>(resolve => {
+      let settled = 0;
+      let won = false;
+      for (const server of batch) {
+        tryServer(server)
+          .then(result => {
+            settled++;
+            if (!won && result) { won = true; resolve({ result, server }); }
+            else if (settled === batch.length && !won) resolve(null);
+          })
+          .catch(() => {
+            settled++;
+            if (settled === batch.length && !won) resolve(null);
+          });
       }
-      const priority: Record<string, number> = { scihub: 0, libgen: 1, archive: 2, zlibrary: 3, ia: 4 };
-      return (priority[a.type] ?? 5) - (priority[b.type] ?? 5);
     });
 
-  progress(`📋 ${remaining.length}개 서버 순차 시도 시작...`);
-
-  for (const server of remaining) {
-    checkCancelled();
-    progress(`🔍 ${server.name} 확인 중...`);
-    let result: DownloadResult | null = null;
-
-    try {
-      if (server.type === 'scihub') {
-        result = await downloadFromSciHub(doi, server);
-      } else if (server.type === 'libgen') {
-        result = await downloadFromLibGen(doi, server);
-      } else if (server.type === 'archive') {
-        result = await downloadFromAnnasArchive(doi, server);
-      } else if (server.type === 'zlibrary') {
-        result = await downloadFromZlibrary(doi, server, userId);
-      } else if (server.type === 'ia') {
-        result = await downloadFromInternetArchive(doi, server);
-      }
-    } catch { progress(`✗ ${server.name} — 오류`); }
-
-    if (result) {
-      progress(`✅ ${server.name} — PDF 확보`);
+    if (winner) {
+      progress(`✅ ${winner.server.name} — PDF 확보`);
       await pool.query(
         `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
-        [server.id]
+        [winner.server.id]
       );
-      return result;
+      return winner.result;
     }
-    progress(`✗ ${server.name} — 없음`);
+    progress(`✗ 라운드 ${i + 1} — 모두 없음`);
+  }
+
+  // 나머지 (Z-Library, Internet Archive) — 순차 시도
+  for (const server of otherBucket) {
+    checkCancelled();
+    progress(`🔍 ${server.name} 확인 중...`);
+    try {
+      const result = await tryServer(server);
+      if (result) {
+        progress(`✅ ${server.name} — PDF 확보`);
+        await pool.query(
+          `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
+          [server.id]
+        );
+        return result;
+      }
+      progress(`✗ ${server.name} — 없음`);
+    } catch { progress(`✗ ${server.name} — 오류`); }
   }
 
   throw new Error('PDF를 찾을 수 없습니다. 잠시 후 다시 시도해주세요.');

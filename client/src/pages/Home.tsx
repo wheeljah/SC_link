@@ -158,7 +158,7 @@ export default function Home() {
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       <div className="text-center py-6">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          학술 논문, 한 번에 다운로드
+          학술논문/도서, 한 번에 검색/다운로드
         </h1>
         <p className="text-slate-500">DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 다운로드됩니다.</p>
       </div>
