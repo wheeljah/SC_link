@@ -13,6 +13,14 @@ import { decrypt } from './encryptionService';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// Cloudflare Worker proxy (CF_PROXY_URL env var). When set, blocked downloads
+// are retried through the CF edge IP to bypass Render's IP blocklist.
+const CF_PROXY_URL = process.env.CF_PROXY_URL?.replace(/\/$/, '') || null;
+function cfProxied(targetUrl: string): string | null {
+  if (!CF_PROXY_URL) return null;
+  return `${CF_PROXY_URL}?url=${encodeURIComponent(targetUrl)}`;
+}
+
 interface DownloadResult {
   filePath: string;
   fileSize: number;
@@ -83,60 +91,74 @@ async function checkPdfAccessible(pdfUrl: string): Promise<boolean> {
 }
 
 async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Promise<DownloadResult | null> {
-  try {
-    const accessible = await checkPdfAccessible(pdfUrl);
-    if (!accessible) {
-      console.log(`[download] PDF URL not accessible (403/blocked): ${pdfUrl}`);
-      return null;
+  // Try direct first; fall back to CF proxy if blocked and proxy is configured
+  const candidates: Array<{ url: string; label: string }> = [
+    { url: pdfUrl, label: 'direct' },
+  ];
+  const proxied = cfProxied(pdfUrl);
+  if (proxied) candidates.push({ url: proxied, label: 'cf-proxy' });
+
+  for (const { url, label } of candidates) {
+    try {
+      if (label === 'direct') {
+        const accessible = await checkPdfAccessible(pdfUrl);
+        if (!accessible) {
+          console.log(`[download] PDF URL not accessible (403/blocked): ${pdfUrl}`);
+          if (!proxied) return null;
+          continue; // try proxy
+        }
+      }
+
+      const pdfRes = await axios.get(url, {
+        responseType: 'stream',
+        timeout: 20000,
+        maxRedirects: 10,
+        headers: {
+          'User-Agent': randomUA(),
+          'Accept': 'application/pdf,*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://doi.org/',
+        },
+      });
+
+      const filename = `${prefix}${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      const filePath = path.join(UPLOAD_DIR, filename);
+      const writer = fs.createWriteStream(filePath);
+
+      await new Promise<void>((resolve, reject) => {
+        pdfRes.data.pipe(writer);
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
+      const stat = fs.statSync(filePath);
+      if (stat.size < 5000) {
+        fs.unlinkSync(filePath);
+        console.log(`[download] file too small (${stat.size}b) [${label}]`);
+        continue;
+      }
+
+      // PDF 매직바이트 검증 (%PDF-)
+      const fd = fs.openSync(filePath, 'r');
+      const magic = Buffer.alloc(5);
+      fs.readSync(fd, magic, 0, 5, 0);
+      fs.closeSync(fd);
+      if (magic.toString('ascii') !== '%PDF-') {
+        fs.unlinkSync(filePath);
+        console.log(`[download] not a real PDF (magic=${magic.toString('ascii').replace(/\n/g,'')}) [${label}]`);
+        continue;
+      }
+
+      if (label === 'cf-proxy') console.log(`[download] success via CF proxy`);
+      return { filePath: `/uploads/${filename}`, fileSize: stat.size };
+    } catch (e) {
+      if (axios.isAxiosError(e)) {
+        console.log(`[download] Failed [${label}]: ${e.response?.status} ${pdfUrl}`);
+      }
+      // continue to next candidate
     }
-
-    const pdfRes = await axios.get(pdfUrl, {
-      responseType: 'stream',
-      timeout: 20000,
-      maxRedirects: 10,
-      headers: {
-        'User-Agent': randomUA(),
-        'Accept': 'application/pdf,*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://doi.org/',
-      },
-    });
-
-    const filename = `${prefix}${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-    const writer = fs.createWriteStream(filePath);
-
-    await new Promise<void>((resolve, reject) => {
-      pdfRes.data.pipe(writer);
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-
-    const stat = fs.statSync(filePath);
-    if (stat.size < 5000) {
-      fs.unlinkSync(filePath);
-      console.log(`[download] file too small (${stat.size}b), skipping`);
-      return null;
-    }
-
-    // PDF 매직바이트 검증 (%PDF-)
-    const fd = fs.openSync(filePath, 'r');
-    const magic = Buffer.alloc(5);
-    fs.readSync(fd, magic, 0, 5, 0);
-    fs.closeSync(fd);
-    if (magic.toString('ascii') !== '%PDF-') {
-      fs.unlinkSync(filePath);
-      console.log(`[download] not a real PDF (magic=${magic.toString('ascii').replace(/\n/g,'')}) — likely HTML page`);
-      return null;
-    }
-
-    return { filePath: `/uploads/${filename}`, fileSize: stat.size };
-  } catch (e) {
-    if (axios.isAxiosError(e)) {
-      console.log(`[download] Failed to download PDF: ${e.response?.status} ${pdfUrl}`);
-    }
-    return null;
   }
+  return null;
 }
 
 // ─── Credentials (Z-Library) ─────────────────────────────────────────────────
@@ -393,7 +415,10 @@ async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<D
   };
 
   try {
-    const apiRes = await axios.get(`${API_BASE}/api/v1/paper/${encodeURIComponent(doi)}`, {
+    // Use CF proxy for API call if available (fast.wbleb.com blocks Render IPs)
+    const directApiUrl = `${API_BASE}/api/v1/paper/${encodeURIComponent(doi)}`;
+    const apiUrl = cfProxied(directApiUrl) ?? directApiUrl;
+    const apiRes = await axios.get(apiUrl, {
       timeout: 8000,
       headers,
     });
@@ -993,136 +1018,37 @@ export async function downloadPaper(
     progress(`✗ RISS — 오류`);
   }
 
-  // ─── Phase 2/3 비활성화: Render 서버 IP에서 sci-hub/libgen/archive 전부 403 차단 ────
-  // 테스트 결과: sci-hub.*, libgen.*, annas-archive.* 모두 X-Proxy-Error: blocked-by-allowlist
-  // Phase 2 (sci-hub.run API), Phase 3 (병렬 미러 검색) 모두 실패하므로 즉시 directUrl 반환
-  // 사용자 브라우저(실제 IP)로 sci-hub.kr 직접 열기 — 브라우저에서는 접근 가능
-  const scihubDirectUrl = `https://sci-hub.kr/${doi}`;
-  progress(`🔗 OA 없음 — Sci-Hub 직접 열기 제공 (브라우저 사용 권장)`);
-  return { filePath: '', fileSize: 0, directUrl: scihubDirectUrl };
-
-  /* ─── 아래 Phase 2/3 코드는 Render IP 차단으로 비활성화 (재활성화 필요 시 주석 해제) ──
-
-  // ─── Phase 2: Sci-Hub.run API (빠른 캐시 우선) ───────────────────────────
-  const { rows: runRows } = await pool.query(
-    `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
-  );
-  if (runRows.length > 0 && !skipSciHub && !isBookChapter) {
-    progress(`🔍 Sci-Hub API 캐시 확인 중...`);
-    const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
-    if (runResult) {
-      progress(`✅ Sci-Hub API — PDF 확보`);
-      await pool.query(
-        `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
-        [runRows[0].id]
-      );
-      return runResult;
-    }
-    progress(`✗ Sci-Hub API — 없음`);
-  }
-
-  // ─── Phase 3: 병렬 검색 (Sci-Hub / LibGen / Anna's Archive) ─────────────────
-  checkCancelled();
-  const servers = await getAvailableServers();
-  if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
-
-  // booksc.org: 도서(책 챕터)만 시도 — 논문은 스킵
-  const remaining = servers
-    .filter(s => !s.url.includes('sci-hub.run'))
-    .filter(s => !(skipSciHub && s.type === 'scihub'))
-    .filter(s => !(s.url.includes('booksc.org') && !isBookChapter));
-
-  // 타입별 버킷 — 각 라운드마다 1개씩 꺼내 병렬 경쟁
-  // sci-hub.kr을 1순위로 고정
-  const shBucket    = remaining
-    .filter(s => s.type === 'scihub')
-    .sort((a, b) => {
-      if (a.url.includes('sci-hub.kr')) return -1;
-      if (b.url.includes('sci-hub.kr')) return  1;
-      return 0;
-    });
-  const lgBucket    = remaining.filter(s => s.type === 'libgen');
-  const aaBucket    = remaining.filter(s => s.type === 'archive');
-  const otherBucket = remaining.filter(s => !['scihub', 'libgen', 'archive'].includes(s.type));
-
-  const tryServer = async (server: ServerInfo): Promise<DownloadResult | null> => {
-    if (server.type === 'scihub')   return downloadFromSciHub(doi, server);
-    if (server.type === 'libgen')   return downloadFromLibGen(doi, server);
-    if (server.type === 'archive')  return downloadFromAnnasArchive(doi, server);
-    if (server.type === 'zlibrary') return downloadFromZlibrary(doi, server, userId);
-    if (server.type === 'ia')       return downloadFromInternetArchive(doi, server);
-    return null;
-  };
-
-  const rounds = Math.max(shBucket.length, lgBucket.length, aaBucket.length, 1);
-  progress(`📋 병렬 검색 시작 (Sci-Hub ${shBucket.length} / LibGen ${lgBucket.length} / Archive ${aaBucket.length})`);
-
-  for (let i = 0; i < rounds; i++) {
-    checkCancelled();
-    // 책 챕터: Archive 우선 / 논문: Sci-Hub 우선
-    const ordered: Array<ServerInfo | undefined> = isBookChapter
-      ? [aaBucket[i],  lgBucket[i], shBucket[i]]
-      : [shBucket[i],  lgBucket[i], aaBucket[i]];
-    const batch = ordered.filter(Boolean) as ServerInfo[];
-    if (batch.length === 0) continue;
-
-    progress(`🔍 병렬 시도: ${batch.map(s => s.name).join(' | ')}`);
-
-    const winner = await new Promise<{ result: DownloadResult; server: ServerInfo } | null>(resolve => {
-      let settled = 0;
-      let won = false;
-      for (const server of batch) {
-        tryServer(server)
-          .then(result => {
-            settled++;
-            if (!won && result) { won = true; resolve({ result, server }); }
-            else if (settled === batch.length && !won) resolve(null);
-          })
-          .catch(() => {
-            settled++;
-            if (settled === batch.length && !won) resolve(null);
-          });
-      }
-    });
-
-    if (winner) {
-      progress(`✅ ${winner.server.name} — PDF 확보`);
-      await pool.query(
-        `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
-        [winner.server.id]
-      );
-      return winner.result;
-    }
-    progress(`✗ 라운드 ${i + 1} — 모두 없음`);
-  }
-
-  // 나머지 (Z-Library, Internet Archive) — 순차 시도
-  for (const server of otherBucket) {
-    checkCancelled();
-    progress(`🔍 ${server.name} 확인 중...`);
-    try {
-      const result = await tryServer(server);
-      if (result) {
-        progress(`✅ ${server.name} — PDF 확보`);
+  // ─── Phase 2: Sci-Hub.run API (CF proxy 경유 — Render IP 차단 우회) ──────────────
+  // CF_PROXY_URL 환경변수가 설정된 경우에만 활성화
+  if (!skipSciHub && !isBookChapter && CF_PROXY_URL) {
+    const { rows: runRows } = await pool.query(
+      `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
+    );
+    if (runRows.length > 0) {
+      checkCancelled();
+      progress(`🔍 Sci-Hub API 캐시 확인 중...`);
+      const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
+      if (runResult) {
+        progress(`✅ Sci-Hub API — PDF 확보`);
         await pool.query(
           `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
-          [server.id]
+          [runRows[0].id]
         );
-        return result;
+        return runResult;
       }
-      progress(`✗ ${server.name} — 없음`);
-    } catch { progress(`✗ ${server.name} — 오류`); }
+      progress(`✗ Sci-Hub API — 없음`);
+    }
   }
 
-  // 모든 서버 실패 — Render IP가 shadow library를 IP 차단함
-  // 사용자 브라우저(IP)로 직접 열기 — sci-hub.kr directUrl 폴백
-  const fallbackUrl = `https://sci-hub.kr/${doi}`;
-  progress(`🔗 서버 IP 제한 — 브라우저 직접 열기 제공: ${fallbackUrl}`);
-  return {
-    filePath: '',
-    fileSize: 0,
-    directUrl: fallbackUrl,
-  };
+  // ─── Phase 3: 병렬 미러 (sci-hub/libgen/archive) — cloudscraper는 CF proxy 우회 불가,
+  //              현재 비활성화. CF Worker + headless-fetch 방식 지원 시 재활성화 예정.
 
-  */ // end Phase 2/3 disabled block
+  // ─── 최종 폴백 ──────────────────────────────────────────────────────────────────
+  if (skipSciHub) {
+    // 2023+ 논문: Sci-Hub 미지원 — 출판사/DOI 페이지로 안내
+    progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
+    return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
+  }
+  progress(`🔗 OA 없음 — Sci-Hub 직접 열기 제공 (브라우저 사용 권장)`);
+  return { filePath: '', fileSize: 0, directUrl: `https://sci-hub.kr/${doi}` };
 }

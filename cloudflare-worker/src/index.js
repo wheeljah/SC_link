@@ -9,12 +9,13 @@
  *       CF_PROXY_URL=https://{worker-name}.{account}.workers.dev
  */
 
-// 허용할 도메인 목록 (shadow library 미러만)
+// 허용할 도메인 목록 (shadow library 미러 + sci-hub.run API 백엔드)
 const ALLOWED_HOSTS = new Set([
   'sci-hub.kr',
   'sci-hub.st',
   'sci-hub.sh',
   'sci-hub.run',
+  'fast.wbleb.com',   // sci-hub.run API backend
   'libgen.rs',
   'libgen.st',
   'library.lol',

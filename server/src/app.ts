@@ -26,6 +26,10 @@ import adminRoutes from './routes/admin';
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000');
 
+// Render(reverse proxy)에서 X-Forwarded-For 헤더 신뢰
+// express-rate-limit이 실제 클라이언트 IP를 올바르게 식별하기 위해 필요
+app.set('trust proxy', 1);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 const allowedOrigins = [

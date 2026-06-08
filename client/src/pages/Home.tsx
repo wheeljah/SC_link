@@ -238,13 +238,22 @@ export default function Home() {
         )}
 
         {directUrl && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className={`mt-4 rounded-xl p-4 border ${
+            directUrl.includes('doi.org') && !directUrl.includes('sci-hub')
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-blue-50 border-blue-200'
+          }`}>
             <div className="flex items-center justify-between">
               <div>
                 {directUrl.includes('sci-hub') ? (
                   <>
                     <p className="text-sm font-semibold text-blue-800">Sci-Hub 직접 열기</p>
-                    <p className="text-xs text-blue-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요. (sci-hub.kr)</p>
+                    <p className="text-xs text-blue-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요.</p>
+                  </>
+                ) : directUrl.includes('doi.org') ? (
+                  <>
+                    <p className="text-sm font-semibold text-amber-800">무료 전문을 찾지 못했습니다</p>
+                    <p className="text-xs text-amber-700 mt-1">출판사 페이지에서 오픈 액세스 또는 구독 여부를 확인해보세요.</p>
                   </>
                 ) : (
                   <>
@@ -257,9 +266,13 @@ export default function Home() {
                 href={directUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 ml-3"
+                className={`text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 ml-3 ${
+                  directUrl.includes('doi.org') && !directUrl.includes('sci-hub')
+                    ? 'bg-amber-500 hover:bg-amber-600'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                PDF 열기
+                {directUrl.includes('doi.org') && !directUrl.includes('sci-hub') ? '출판사 페이지' : 'PDF 열기'}
               </a>
             </div>
           </div>
