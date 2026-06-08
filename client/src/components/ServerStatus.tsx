@@ -83,9 +83,8 @@ export default function ServerStatus({ compact = false }: { compact?: boolean })
         })}
       </div>
 
-      <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+      <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
         <span className="text-xs text-slate-400">총 {servers.length}개 서버</span>
-        <Link to="/servers" className="text-xs text-blue-600 hover:underline font-medium">전체 목록 →</Link>
       </div>
     </div>
   );
