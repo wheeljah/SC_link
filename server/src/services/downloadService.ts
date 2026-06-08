@@ -66,15 +66,18 @@ async function getBrowser() {
 
 async function checkPdfAccessible(pdfUrl: string): Promise<boolean> {
   try {
-    const head = await axios.head(pdfUrl, { timeout: 15000, maxRedirects: 5 });
-    const ct = String(head.headers['content-type'] || '');
-    const size = head.headers['content-length'];
-    return (ct.includes('pdf') || !!size) && head.status === 200;
+    const head = await axios.head(pdfUrl, {
+      timeout: 10000, maxRedirects: 5,
+      headers: { 'User-Agent': randomUA(), 'Accept': 'application/pdf,*/*' },
+    });
+    // 명시적 차단(403/401/429)만 false, 나머지는 GET으로 시도 (magic byte가 최종 검증)
+    return head.status < 400;
   } catch (e) {
-    if (axios.isAxiosError(e) && (e.response?.status === 403 || e.response?.status === 401)) {
-      return false;
+    if (axios.isAxiosError(e)) {
+      const s = e.response?.status;
+      if (s === 403 || s === 401 || s === 429) return false;
     }
-    return true;
+    return true; // 네트워크 오류 포함 — 일단 GET 시도
   }
 }
 
@@ -89,7 +92,13 @@ async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Pr
     const pdfRes = await axios.get(pdfUrl, {
       responseType: 'stream',
       timeout: 60000,
-      headers: { 'User-Agent': 'Mozilla/5.0 ScholarLink/1.0' },
+      maxRedirects: 10,
+      headers: {
+        'User-Agent': randomUA(),
+        'Accept': 'application/pdf,*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://doi.org/',
+      },
     });
 
     const filename = `${prefix}${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
