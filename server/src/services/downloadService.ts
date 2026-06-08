@@ -925,14 +925,35 @@ export async function downloadPaper(
   };
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
-  // --- 연도 사전 확인 (2022년 초과 논문은 Sci-Hub 건너뛼) ---
+  // --- 연도 사전 확인 (2022년 초과 논문은 Sci-Hub 건너뜀) ---
   let paperYear: number | undefined;
+  // 1차: Semantic Scholar
   try {
     const meta = await fetchPaperMetadataFromS2(doi);
     paperYear = meta?.year;
   } catch { /* ignore */ }
+  // 2차: CrossRef (최신 논문에 S2가 없을 때 대비)
+  if (!paperYear) {
+    try {
+      const cr = await axios.get(
+        `https://api.crossref.org/works/${encodeURIComponent(doi)}?select=published`,
+        { timeout: 6000 }
+      );
+      paperYear = cr.data?.message?.published?.['date-parts']?.[0]?.[0];
+    } catch { /* ignore */ }
+  }
+  // 3차: OpenAlex
+  if (!paperYear) {
+    try {
+      const oa = await axios.get(
+        `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=publication_year`,
+        { timeout: 6000 }
+      );
+      paperYear = oa.data?.publication_year;
+    } catch { /* ignore */ }
+  }
   const skipSciHub = paperYear !== undefined && paperYear > 2022;
-  if (skipSciHub) progress(`[skip] ${paperYear}년 논문 — Sci-Hub 건너뛼 (2022년 이후 미지원)`);
+  if (skipSciHub) progress(`[skip] ${paperYear}년 논문 — Sci-Hub 건너뜀 (2022년 이후 미지원)`);
 
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
     ['OpenAlex',         () => downloadFromOpenAlex(doi)],
