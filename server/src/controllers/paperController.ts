@@ -96,6 +96,30 @@ export async function requestDownload(req: AuthRequest, res: Response): Promise<
       });
     }
 
+    // directUrl: 서버 IP 차단으로 파일 저장 불가 — 클라이언트에 OA URL 반환
+    if (result.directUrl && !result.filePath) {
+      const finalTitle   = result.title   ?? meta?.title;
+      const finalAuthors = result.authors ?? meta?.authors;
+      const finalYear    = result.year    ?? meta?.year;
+      const finalJournal = result.journal ?? meta?.journal;
+      await pool.query(
+        `UPDATE paper_requests SET status='completed', downloaded_at=NOW(),
+         title=$1, authors=$2, year=$3, journal=$4 WHERE id=$5`,
+        [finalTitle, finalAuthors, finalYear, finalJournal, requestId]
+      );
+      send('progress', { step: 'complete', message: '출판사 OA 링크 확인', progress: 100 });
+      send('complete', {
+        requestId,
+        doi,
+        directUrl: result.directUrl,
+        title:     finalTitle,
+        authors:   finalAuthors,
+        year:      finalYear,
+        progress:  100,
+      });
+      return;
+    }
+
     send('progress', { step: 'saving', message: '파일 저장 중...', progress: 80 });
 
     // title/authors/year/journal DB 저장

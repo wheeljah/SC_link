@@ -20,6 +20,7 @@ interface DownloadResult {
   authors?: string;
   journal?: string;
   year?: number;
+  directUrl?: string;
 }
 
 // ─── Browser (Puppeteer) ──────────────────────────────────────────────────────
@@ -794,6 +795,21 @@ async function downloadFromOpenAlex(doi: string): Promise<DownloadResult | null>
           };
         }
       } catch { /* 다음 URL 시도 */ }
+    }
+
+    // 서버 IP 차단(출판사 방화벽)으로 다운로드 실패 — OA URL은 유효하므로 클라이언트에 directUrl 반환
+    if (candidates.length > 0) {
+      const authors = ((data.authorships || []) as { author?: { display_name?: string } }[])
+        .slice(0, 3).map((a) => a.author?.display_name || '').filter(Boolean).join(', ');
+      console.log(`[openalex] Server download blocked; returning directUrl: ${candidates[0]}`);
+      return {
+        filePath: '',
+        fileSize: 0,
+        directUrl: candidates[0],
+        title: data.title || undefined,
+        authors: authors || undefined,
+        year: data.publication_year || undefined,
+      };
     }
     return null;
   } catch (err) {

@@ -15,23 +15,28 @@ export default function Home() {
     journal?: string; citationCount?: number;
   } | null>(null);
   const [result, setResult] = useState<{ filePath: string; fileSize: number; doi: string } | null>(null);
+  const [directUrl, setDirectUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showAuth, setShowAuth] = useState(false);
   const { isLoggedIn } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const cancelDownload = () => {
+    cancelledRef.current = true;
     abortRef.current?.abort();
     abortRef.current = null;
   };
 
   const doDownload = async () => {
     if (!input.trim()) return;
+    cancelledRef.current = false;
     const abort = new AbortController();
     abortRef.current = abort;
     setLoading(true);
     setError('');
     setResult(null);
+    setDirectUrl(null);
     setLogs([]);
     setPaperMeta(null);
     setProgress({ step: 'start', message: '요청 시작 중...', percent: 10 });
@@ -52,8 +57,9 @@ export default function Home() {
       let buf = '';
 
       while (true) {
+        if (cancelledRef.current) break;
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done || cancelledRef.current) break;
         buf += decoder.decode(value, { stream: true });
         const parts = buf.split('\n\n');
         buf = parts.pop() || '';
@@ -69,17 +75,25 @@ export default function Home() {
           if (event === 'progress') setProgress({ step: payload.step, message: payload.message, percent: payload.progress });
           if (event === 'log') setLogs(prev => [...prev, payload.message as string]);
           if (event === 'metadata') setPaperMeta(payload as typeof paperMeta);
-          if (event === 'complete') setResult({ filePath: `${getBackendOrigin()}${payload.filePath}`, fileSize: payload.fileSize, doi: payload.doi });
+          if (event === 'complete') {
+            if (payload.directUrl) {
+              setDirectUrl(payload.directUrl as string);
+            } else {
+              setResult({ filePath: `${getBackendOrigin()}${payload.filePath}`, fileSize: payload.fileSize, doi: payload.doi });
+            }
+          }
           if (event === 'error') setError(payload.message);
         }
       }
     } catch (e) {
-      if ((e as Error).name === 'AbortError') {
-        setError('검색이 중지되었습니다.');
-      } else {
+      if (!cancelledRef.current) {
         setError('다운로드 중 오류가 발생했습니다.');
       }
     } finally {
+      if (cancelledRef.current) {
+        setError('검색이 중지되었습니다.');
+      }
+      cancelledRef.current = false;
       abortRef.current = null;
       setLoading(false);
       setProgress(null);
@@ -175,6 +189,25 @@ export default function Home() {
               {paperMeta.year    && <span>📅 {paperMeta.year}</span>}
               {paperMeta.journal && <span className="truncate">📖 {paperMeta.journal}</span>}
               {paperMeta.citationCount !== undefined && <span>💬 인용 {paperMeta.citationCount.toLocaleString()}회</span>}
+            </div>
+          </div>
+        )}
+
+        {directUrl && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 — 브라우저에서 직접 열기</p>
+                <p className="text-xs text-blue-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
+              </div>
+              <a
+                href={directUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 ml-3"
+              >
+                PDF 열기
+              </a>
             </div>
           </div>
         )}
