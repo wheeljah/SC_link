@@ -953,6 +953,8 @@ export async function downloadPaper(
     } catch { /* ignore */ }
   }
   const skipSciHub = paperYear !== undefined && paperYear > 2022;
+  // 책/챕터 DOI 판별 — Phase 2 이전에 선언 (Springer: 10.XXXX/978-, Elsevier: 10.XXXX/B978-)
+  const isBookChapter = /^10\.\d{4}\/B?978-/.test(doi) || doi.includes('_');
   if (skipSciHub) progress(`[skip] ${paperYear}년 논문 — Sci-Hub 건너뜀 (2022년 이후 미지원)`);
 
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
@@ -993,7 +995,7 @@ export async function downloadPaper(
   const { rows: runRows } = await pool.query(
     `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
   );
-  if (runRows.length > 0 && !skipSciHub) {
+  if (runRows.length > 0 && !skipSciHub && !isBookChapter) {
     progress(`🔍 Sci-Hub API 캐시 확인 중...`);
     const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
     if (runResult) {
@@ -1011,9 +1013,6 @@ export async function downloadPaper(
   checkCancelled();
   const servers = await getAvailableServers();
   if (servers.length === 0) throw new Error('현재 사용 가능한 다운로드 서버가 없습니다.');
-
-  // 책 챕터 DOI 판별 (Springer: 10.1007/978-... 또는 _ 포함)
-  const isBookChapter = /^10\.\d{4}\/978-/.test(doi) || doi.includes('_');
 
   // 시도 순서: 책 챕터이면 Anna's Archive 우선, 그 다음 Sci-Hub → LibGen
   const remaining = servers
