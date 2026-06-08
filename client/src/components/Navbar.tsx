@@ -25,6 +25,9 @@ export default function Navbar() {
           <Link to="/community" className="text-slate-600 hover:text-slate-900 transition-colors hidden sm:block">
             커뮤니티
           </Link>
+          <Link to="/report" className="text-slate-600 hover:text-slate-900 transition-colors hidden sm:block">
+            에러 보고
+          </Link>
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">

@@ -160,6 +160,20 @@ CREATE INDEX IF NOT EXISTS idx_community_status ON community_requests(status);
 CREATE INDEX IF NOT EXISTS idx_community_user ON community_requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_servers_status ON download_servers(status);
 
+-- 에러 보고
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id          SERIAL PRIMARY KEY,
+  title       VARCHAR(200) NOT NULL,
+  description TEXT        NOT NULL,
+  doi         VARCHAR(500),
+  status      VARCHAR(20)  NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open','in_progress','resolved')),
+  user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
+
 -- 기본 서버 데이터 (2026-06 업데이트)
 INSERT INTO download_servers (name, url, type, requires_login, location, notes) VALUES
   ('Sci-Hub.run',  'https://sci-hub.run',  'scihub',  false, 'International', 'FastAPI 캐시 백엔드(fast.wbleb.com) -- 가장 빠름'),
@@ -242,7 +256,7 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   {
     sql: `UPDATE ad_banners SET message = $1
           WHERE position = 'TOP' AND advertiser_name = '비드바이브(BidVibe)'`,
-    params: ['엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)'],
+    params: ['엑셀로 공급사 그만 찾고, 비드바이세(BidVibe)'],
   },
   {
     sql: `UPDATE ad_banners SET message = $1
@@ -251,32 +265,14 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   },
 ];
 
-async function migrate() {
+export async function migrate(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query(SQL);
     for (const { sql, params } of RUNTIME_UPDATES) {
-      const result = await client.query(sql, params);
-      console.log(`[migrate] update rowCount=${result.rowCount} — ${sql.slice(0, 60).replace(/\n/g, ' ')}...`);
+      await client.query(sql, params);
     }
-    console.log('✅ DB 마이그레이션 완료');
-  } catch (err) {
-    console.error('❌ 마이그레이션 오류:', err);
-    throw err;
   } finally {
     client.release();
-    // pool.end()는 CLI 직접 실행 시에만 호출 (app.ts import 시엔 pool 유지)
-    if (require.main === module) await pool.end();
   }
-}
-
-// CLI로 직접 실행 시 자동 실행 (app.ts에서 import 시엔 실행 안 됨)
-export { migrate };
-
-// node dist/db/migrate.js 로 직접 실행할 때
-const isMain = require.main === module;
-if (isMain) {
-  migrate()
-    .then(() => process.exit(0))
-    .catch(() => process.exit(0));
 }
