@@ -92,7 +92,7 @@ async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Pr
 
     const pdfRes = await axios.get(pdfUrl, {
       responseType: 'stream',
-      timeout: 60000,
+      timeout: 20000,
       maxRedirects: 10,
       headers: {
         'User-Agent': randomUA(),
@@ -923,6 +923,8 @@ export async function downloadPaper(
   const checkCancelled = () => {
     if (signal?.cancelled) throw new Error('검색이 중지되었습니다.');
   };
+
+  progress(`🔎 DOI 정보 확인 중...`);
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
   // --- 연도 사전 확인 (2022년 초과 논문은 Sci-Hub 건너뜀) ---

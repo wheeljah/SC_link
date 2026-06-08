@@ -41,6 +41,14 @@ export default function Navbar() {
               >
                 이력
               </Link>
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="text-purple-600 hover:text-purple-800 font-semibold transition-colors hidden sm:block"
+                >
+                  어드민
+                </Link>
+              )}
               <button
                 onClick={handleLogout}
                 className="text-slate-500 hover:text-red-600 transition-colors"
