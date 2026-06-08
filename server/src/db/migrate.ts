@@ -184,8 +184,10 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('Library.lol',  'https://library.lol',   'libgen',  false, 'International', 'libgen 직접 다운로드 프록시'),
   ('BookSC.org',   'https://booksc.org',    'libgen',  false, 'International', NULL),
   ('Z-Library (singlelogin)', 'https://singlelogin.re', 'zlibrary', true, 'International', '계정 필요'),
+  ('Sci-Hub.vkif.top', 'https://sci-hub.vkif.top', 'scihub',  false, 'International', 'SLUM 모니터링 미러 (2026)'),
   ('Anna''s Archive .gl', 'https://annas-archive.gl', 'archive', false, 'International', 'annas-archive.org 차단(Jan 2026) 후 대체 미러'),
   ('Anna''s Archive .gd', 'https://annas-archive.gd', 'archive', false, 'International', 'Anna Archive 미러 (2026)'),
+  ('Anna''s Archive .pk', 'https://annas-archive.pk', 'archive', false, 'International', '2026-03 공식 신규 도메인 (SLUM 모니터링)'),
   ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요')
 ON CONFLICT DO NOTHING;
 
@@ -222,6 +224,18 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
               name = 'Anna''s Archive .gl',
               notes = 'annas-archive.org 차단(Jan 2026) → .gl 미러로 교체'
           WHERE url LIKE '%annas-archive.org%'`,
+    params: [],
+  },
+  // annas-archive.li: 2026-03-01 영구 삭제 → 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false
+          WHERE url LIKE '%annas-archive.li%'`,
+    params: [],
+  },
+  // annas-archive.pm: 2026-02 차단 → 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false
+          WHERE url LIKE '%annas-archive.pm%'`,
     params: [],
   },
   // 배너 문구 최신화
