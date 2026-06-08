@@ -18,12 +18,24 @@ export default function Home() {
   const [directUrl, setDirectUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showAuth, setShowAuth] = useState(false);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportForm, setReportForm] = useState({ title: '', description: '', doi: '' });
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reportSuccess, setReportSuccess] = useState(false);
   const { isLoggedIn } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
 
   const cancelDownload = () => {
     window.location.reload();
+  };
+
+  const handleButtonClick = () => {
+    if (loading) { cancelDownload(); return; }
+    if (!input.trim()) return;
+    if (!isLoggedIn) { setShowAuth(true); return; }
+    doDownload();
   };
 
   const doDownload = async () => {
@@ -98,6 +110,40 @@ export default function Home() {
     }
   };
 
+  const openReportForm = () => {
+    if (!isLoggedIn) { setShowAuth(true); return; }
+    const doi = result?.doi || (input.includes('/') ? input.trim() : '');
+    setReportForm(v => ({ ...v, doi }));
+    setShowReportForm(v => !v);
+  };
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportForm.title.trim() || !reportForm.description.trim()) return;
+    setReportSubmitting(true);
+    setReportError('');
+    setReportSuccess(false);
+    try {
+      const res = await fetch(`${getApiBaseURL()}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(reportForm),
+      });
+      const json = await res.json();
+      if (!json.success) { setReportError(json.message || '오류가 발생했습니다.'); return; }
+      setReportForm({ title: '', description: '', doi: '' });
+      setReportSuccess(true);
+      setTimeout(() => { setShowReportForm(false); setReportSuccess(false); }, 2000);
+    } catch {
+      setReportError('서버 오류가 발생했습니다.');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   const handleDownload = (e: React.FormEvent) => {
     e.preventDefault();
     if (loading || !input.trim()) return;
@@ -127,8 +173,8 @@ export default function Home() {
             className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
-            type={loading ? 'button' : 'submit'}
-            onClick={loading ? cancelDownload : undefined}
+            type="button"
+            onClick={handleButtonClick}
             disabled={!loading && !input.trim()}
             className={`font-semibold px-6 py-3 rounded-xl transition-colors shrink-0 text-white ${
               loading
@@ -184,9 +230,9 @@ export default function Home() {
             <p className="font-semibold text-slate-800 leading-snug">{paperMeta.title}</p>
             {paperMeta.authors && <p className="text-slate-500 text-xs truncate">{paperMeta.authors}</p>}
             <div className="flex gap-3 text-xs text-slate-400 mt-1">
-              {paperMeta.year    && <span>📅 {paperMeta.year}</span>}
-              {paperMeta.journal && <span className="truncate">📖 {paperMeta.journal}</span>}
-              {paperMeta.citationCount !== undefined && <span>💬 인용 {paperMeta.citationCount.toLocaleString()}회</span>}
+              {paperMeta.year    && <span>&#128197; {paperMeta.year}</span>}
+              {paperMeta.journal && <span className="truncate">&#128214; {paperMeta.journal}</span>}
+              {paperMeta.citationCount !== undefined && <span>&#128172; 인용 {paperMeta.citationCount.toLocaleString()}회</span>}
             </div>
           </div>
         )}
@@ -195,7 +241,7 @@ export default function Home() {
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 — 브라우저에서 직접 열기</p>
+                <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 &#8212; 브라우저에서 직접 열기</p>
                 <p className="text-xs text-blue-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
               </div>
               <a
@@ -215,7 +261,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-green-800">다운로드 완료!</p>
-                <p className="text-xs text-green-600 mt-1">DOI: {result.doi} · {(result.fileSize / 1024 / 1024).toFixed(1)} MB</p>
+                <p className="text-xs text-green-600 mt-1">DOI: {result.doi} &middot; {(result.fileSize / 1024 / 1024).toFixed(1)} MB</p>
               </div>
               <a
                 href={result.filePath}
@@ -261,6 +307,61 @@ export default function Home() {
             요청하기
           </Link>
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-800">에러 보고</h3>
+            <p className="text-sm text-slate-500 mt-0.5">다운로드 실패, 오작동 등 문제를 알려주세요.</p>
+          </div>
+          <button
+            onClick={openReportForm}
+            className="shrink-0 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            보고하기
+          </button>
+        </div>
+
+        {showReportForm && (
+          <form onSubmit={handleReportSubmit} className="space-y-3 mt-4 pt-4 border-t border-slate-100">
+            <input
+              type="text"
+              placeholder="제목 (예: 특정 DOI 다운로드 실패)"
+              value={reportForm.title}
+              onChange={e => setReportForm(v => ({ ...v, title: e.target.value }))}
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="관련 DOI (선택)"
+              value={reportForm.doi}
+              onChange={e => setReportForm(v => ({ ...v, doi: e.target.value }))}
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <textarea
+              placeholder="어떤 문제가 발생했는지 설명해주세요."
+              value={reportForm.description}
+              onChange={e => setReportForm(v => ({ ...v, description: e.target.value }))}
+              rows={3}
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            {reportError && <p className="text-sm text-red-600">{reportError}</p>}
+            {reportSuccess && <p className="text-sm text-green-600">보고가 등록되었습니다. 감사합니다!</p>}
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setShowReportForm(false)}
+                className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">취소</button>
+              <button type="submit" disabled={reportSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                {reportSubmitting ? '등록 중...' : '등록'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <Link to="/report" className="text-xs text-slate-400 hover:text-slate-600 mt-3 inline-block">
+          전체 보고 목록 &rarr;
+        </Link>
       </div>
 
       <AuthModal
