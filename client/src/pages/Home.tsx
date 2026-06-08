@@ -23,9 +23,7 @@ export default function Home() {
   const cancelledRef = useRef(false);
 
   const cancelDownload = () => {
-    cancelledRef.current = true;
-    abortRef.current?.abort();
-    abortRef.current = null;
+    window.location.reload();
   };
 
   const doDownload = async () => {
