@@ -170,7 +170,7 @@ export default function Home() {
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="DOI, PMID, arXiv ID, 논문 제목, 또는 저널 URL 입력..."
-            className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
           <button
             type="button"
@@ -179,7 +179,7 @@ export default function Home() {
             className={`font-semibold px-6 py-3 rounded-xl transition-colors shrink-0 text-white ${
               loading
                 ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400'
+                : 'bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400'
             }`}
           >
             {loading ? '검색 중지' : '다운로드'}
@@ -200,7 +200,7 @@ export default function Home() {
             </div>
             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                className="h-full bg-teal-500 rounded-full transition-all duration-300"
                 style={{ width: `${progress.percent}%` }}
               />
             </div>
@@ -219,7 +219,7 @@ export default function Home() {
               </div>
             )}
             <p className="text-xs text-slate-400">논문에 따라 시간이 많이 소요될 수 있습니다.</p>
-            <p className="text-xs text-blue-500 mt-1">
+            <p className="text-xs text-teal-500 mt-1">
               찾기 어려우시면 아래 커뮤니티 요청으로 다른 연구자에게 요청해보세요.
             </p>
           </div>
@@ -241,14 +241,14 @@ export default function Home() {
           <div className={`mt-4 rounded-xl p-4 border ${
             directUrl.includes('doi.org') && !directUrl.includes('sci-hub')
               ? 'bg-amber-50 border-amber-200'
-              : 'bg-blue-50 border-blue-200'
+              : 'bg-teal-50 border-teal-200'
           }`}>
             <div className="flex items-center justify-between">
               <div>
                 {directUrl.includes('sci-hub') ? (
                   <>
-                    <p className="text-sm font-semibold text-blue-800">Sci-Hub 직접 열기</p>
-                    <p className="text-xs text-blue-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요.</p>
+                    <p className="text-sm font-semibold text-teal-800">Sci-Hub 직접 열기</p>
+                    <p className="text-xs text-teal-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요.</p>
                   </>
                 ) : directUrl.includes('doi.org') ? (
                   <>
@@ -257,8 +257,8 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-semibold text-blue-800">출판사 OA 논문 &#8212; 브라우저에서 직접 열기</p>
-                    <p className="text-xs text-blue-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
+                    <p className="text-sm font-semibold text-teal-800">출판사 OA 논문 &#8212; 브라우저에서 직접 열기</p>
+                    <p className="text-xs text-teal-600 mt-1">서버 IP 제한으로 직접 링크를 제공합니다.</p>
                   </>
                 )}
               </div>
@@ -269,7 +269,7 @@ export default function Home() {
                 className={`text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 ml-3 ${
                   directUrl.includes('doi.org') && !directUrl.includes('sci-hub')
                     ? 'bg-amber-500 hover:bg-amber-600'
-                    : 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-teal-600 hover:bg-teal-700'
                 }`}
               >
                 {directUrl.includes('doi.org') && !directUrl.includes('sci-hub') ? '출판사 페이지' : 'PDF 열기'}
@@ -312,7 +312,7 @@ export default function Home() {
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-slate-800">커뮤니티 요청</h3>
-          <Link to="/community" className="text-sm text-blue-600 hover:underline">전체 보기</Link>
+          <Link to="/community" className="text-sm text-teal-600 hover:underline">전체 보기</Link>
         </div>
         <p className="text-sm text-slate-500">원하는 논문을 요청하거나, 다른 연구자의 요청에 응답하세요.</p>
         <div className="mt-3 flex gap-2">
@@ -324,7 +324,7 @@ export default function Home() {
           </Link>
           <Link
             to="/community/new"
-            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            className="text-sm bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             요청하기
           </Link>
@@ -352,21 +352,21 @@ export default function Home() {
               placeholder="제목 (예: 특정 DOI 다운로드 실패)"
               value={reportForm.title}
               onChange={e => setReportForm(v => ({ ...v, title: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <input
               type="text"
               placeholder="관련 DOI (선택)"
               value={reportForm.doi}
               onChange={e => setReportForm(v => ({ ...v, doi: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <textarea
               placeholder="어떤 문제가 발생했는지 설명해주세요."
               value={reportForm.description}
               onChange={e => setReportForm(v => ({ ...v, description: e.target.value }))}
               rows={3}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
             />
             {reportError && <p className="text-sm text-red-600">{reportError}</p>}
             {reportSuccess && <p className="text-sm text-green-600">보고가 등록되었습니다. 감사합니다!</p>}
@@ -374,7 +374,7 @@ export default function Home() {
               <button type="button" onClick={() => setShowReportForm(false)}
                 className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">취소</button>
               <button type="submit" disabled={reportSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
                 {reportSubmitting ? '등록 중...' : '등록'}
               </button>
             </div>

@@ -38,7 +38,7 @@ export default function VerifyEmail() {
             <div className="text-5xl mb-4">✅</div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">인증 완료!</h2>
             <p className="text-slate-500 text-sm mb-6">{message}</p>
-            <Link to="/login" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg inline-block transition-colors">
+            <Link to="/login" className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-lg inline-block transition-colors">
               로그인하기
             </Link>
           </>
@@ -48,7 +48,7 @@ export default function VerifyEmail() {
             <div className="text-5xl mb-4">❌</div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">인증 실패</h2>
             <p className="text-slate-500 text-sm mb-6">{message}</p>
-            <Link to="/register" className="text-blue-600 hover:underline text-sm">다시 회원가입</Link>
+            <Link to="/register" className="text-teal-600 hover:underline text-sm">다시 회원가입</Link>
           </>
         )}
       </div>

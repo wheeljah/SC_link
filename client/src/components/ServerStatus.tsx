@@ -4,7 +4,7 @@ import { DownloadServer } from '../types';
 import api, { initPromise } from '../services/api';
 
 const TYPE_BADGE: Record<string, string> = {
-  scihub:   'bg-blue-50 text-blue-600 border-blue-100',
+  scihub:   'bg-teal-50 text-teal-600 border-teal-100',
   libgen:   'bg-violet-50 text-violet-600 border-violet-100',
   archive:  'bg-amber-50 text-amber-600 border-amber-100',
   zlibrary: 'bg-emerald-50 text-emerald-600 border-emerald-100',

@@ -5,7 +5,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  open:        { label: '요청 중',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  open:        { label: '요청 중',  cls: 'bg-teal-50 text-teal-700 border-teal-200' },
   in_progress: { label: '진행 중',  cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   fulfilled:   { label: '완료',     cls: 'bg-green-50 text-green-700 border-green-200' },
   closed:      { label: '닫힘',     cls: 'bg-slate-50 text-slate-500 border-slate-200' },
@@ -31,7 +31,7 @@ export default function Community() {
         <h1 className="text-2xl font-bold text-slate-900">💬 커뮤니티 요청</h1>
         <button
           onClick={() => isLoggedIn ? navigate('/community/new') : navigate('/login')}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
         >
           + 요청하기
         </button>
@@ -44,7 +44,7 @@ export default function Community() {
             key={val}
             onClick={() => setFilter(val)}
             className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
-              filter === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              filter === val ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
           >
             {lbl}
@@ -69,7 +69,7 @@ export default function Community() {
               <Link
                 key={r.id}
                 to={`/community/${r.id}`}
-                className="block bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all"
+                className="block bg-white border border-slate-200 rounded-xl p-4 hover:border-teal-200 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

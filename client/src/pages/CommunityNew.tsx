@@ -36,23 +36,23 @@ export default function CommunityNew() {
           <label className="block text-sm font-medium text-slate-700 mb-1">제목 *</label>
           <input type="text" value={title} onChange={e => setTitle(e.target.value)} required
             placeholder="요청할 논문 제목 또는 설명을 입력하세요"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">DOI (알고 있다면)</label>
           <input type="text" value={doi} onChange={e => setDoi(e.target.value)}
             placeholder="10.1038/nature12373"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">상세 설명</label>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4}
             placeholder="PDF와 supplement data가 필요합니다..."
-            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button type="submit" disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
+          className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
           {loading ? '등록 중...' : '요청 등록'}
         </button>
       </form>

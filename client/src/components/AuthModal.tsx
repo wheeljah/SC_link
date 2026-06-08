@@ -82,13 +82,13 @@ export default function AuthModal({ open, onClose, onSuccess, title, description
               autoFocus
               autoComplete="email"
               placeholder="your@email.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-slate-700">비밀번호</label>
-              <button type="button" onClick={goForgot} className="text-xs text-blue-600 hover:underline">
+              <button type="button" onClick={goForgot} className="text-xs text-teal-600 hover:underline">
                 비밀번호를 잊으셨나요?
               </button>
             </div>
@@ -99,7 +99,7 @@ export default function AuthModal({ open, onClose, onSuccess, title, description
               required
               autoComplete="current-password"
               placeholder="••••••••"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -124,7 +124,7 @@ export default function AuthModal({ open, onClose, onSuccess, title, description
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
@@ -133,7 +133,7 @@ export default function AuthModal({ open, onClose, onSuccess, title, description
         {/* 회원가입 안내 */}
         <p className="text-center text-sm text-slate-500 mt-5">
           계정이 없으신가요?{' '}
-          <button onClick={goRegister} className="text-blue-600 hover:underline font-medium">
+          <button onClick={goRegister} className="text-teal-600 hover:underline font-medium">
             회원가입
           </button>
         </p>

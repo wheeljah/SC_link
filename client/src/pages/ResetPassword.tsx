@@ -24,7 +24,7 @@ export default function ResetPassword() {
             <div className="text-center">
               <div className="text-4xl mb-3">📧</div>
               <p className="text-slate-600 text-sm">비밀번호 재설정 링크를 이메일로 발송했습니다.</p>
-              <Link to="/login" className="mt-4 inline-block text-blue-600 hover:underline text-sm">로그인으로</Link>
+              <Link to="/login" className="mt-4 inline-block text-teal-600 hover:underline text-sm">로그인으로</Link>
             </div>
           ) : (
             <form onSubmit={async e => {
@@ -37,11 +37,11 @@ export default function ResetPassword() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">가입 이메일</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
               {error && <p className="text-red-600 text-sm">{error}</p>}
               <button type="submit" disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
+                className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
                 {loading ? '전송 중...' : '재설정 링크 발송'}
               </button>
             </form>
@@ -61,7 +61,7 @@ export default function ResetPassword() {
             <div className="text-4xl mb-3">✅</div>
             <p className="text-slate-600 text-sm mb-4">비밀번호가 변경되었습니다.</p>
             <button onClick={() => navigate('/login')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
+              className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
               로그인하기
             </button>
           </div>
@@ -79,16 +79,16 @@ export default function ResetPassword() {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">새 비밀번호 (영문+숫자 8자 이상)</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">비밀번호 확인</label>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required
-                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <button type="submit" disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors">
               {loading ? '저장 중...' : '비밀번호 변경'}
             </button>
           </form>

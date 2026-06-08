@@ -145,7 +145,7 @@ export default function Admin() {
           {(['users', 'downloads'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-6 py-3 text-sm font-semibold transition-colors ${
-                tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'
+                tab === t ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-800'
               }`}>
               {t === 'users' ? `가입자 (${userTotal.toLocaleString()})` : `다운로드 이력 (${dlTotal.toLocaleString()})`}
             </button>
@@ -243,7 +243,7 @@ export default function Admin() {
                       <td className="py-2 pr-4 text-slate-400">{d.id}</td>
                       <td className="py-2 pr-4 text-xs text-slate-500 max-w-[140px] truncate">{d.user_email || '-'}</td>
                       <td className="py-2 pr-4 text-xs max-w-[160px] truncate" title={d.input_value}>{d.input_value}</td>
-                      <td className="py-2 pr-4 font-mono text-xs text-blue-600 max-w-[160px] truncate">{d.normalized_doi || '-'}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-teal-600 max-w-[160px] truncate">{d.normalized_doi || '-'}</td>
                       <td className="py-2 pr-4">
                         <span className={`text-xs px-1.5 py-0.5 rounded ${
                           d.status === 'completed' ? 'bg-green-100 text-green-700' :

@@ -74,7 +74,7 @@ export default function CredentialModal({ server, existing, onClose, onSaved }: 
               value={loginId}
               onChange={e => setLoginId(e.target.value)}
               placeholder={`${server.name} 계정 아이디`}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               autoComplete="username"
             />
           </div>
@@ -87,7 +87,7 @@ export default function CredentialModal({ server, existing, onClose, onSaved }: 
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSave()}
                 placeholder={existing ? '새 비밀번호 (변경 시에만 입력)' : '비밀번호'}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 autoComplete="current-password"
               />
               <button
@@ -107,7 +107,7 @@ export default function CredentialModal({ server, existing, onClose, onSaved }: 
           <button
             onClick={handleSave}
             disabled={loading}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? '저장 중...' : '저장하기'}
           </button>

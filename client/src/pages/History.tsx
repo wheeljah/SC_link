@@ -64,7 +64,7 @@ export default function History() {
                   href={`/api/v1/papers/${r.id}/file`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                  className="shrink-0 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
                 >
                   PDF
                 </a>

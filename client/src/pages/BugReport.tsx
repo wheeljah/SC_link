@@ -105,7 +105,7 @@ export default function BugReport() {
         </div>
         <button
           onClick={() => isLoggedIn ? setShowForm(v => !v) : setShowAuth(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
         >
           보고하기
         </button>
@@ -119,28 +119,28 @@ export default function BugReport() {
             placeholder="제목 (예: 특정 DOI 다운로드 실패)"
             value={form.title}
             onChange={e => setForm(v => ({ ...v, title: e.target.value }))}
-            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="관련 DOI (선택)"
             value={form.doi}
             onChange={e => setForm(v => ({ ...v, doi: e.target.value }))}
-            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
           <textarea
             placeholder="어떤 문제가 발생했는지 자세히 설명해주세요."
             value={form.description}
             onChange={e => setForm(v => ({ ...v, description: e.target.value }))}
             rows={4}
-            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)}
               className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">취소</button>
             <button type="submit" disabled={submitting}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+              className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
               {submitting ? '등록 중...' : '등록'}
             </button>
           </div>
@@ -173,7 +173,7 @@ export default function BugReport() {
                   )}
                 </div>
                 {r.doi && (
-                  <p className="text-xs text-blue-600 font-mono">DOI: {r.doi}</p>
+                  <p className="text-xs text-teal-600 font-mono">DOI: {r.doi}</p>
                 )}
                 <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{r.description}</p>
                 <p className="text-xs text-slate-400">

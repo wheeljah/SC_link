@@ -50,9 +50,9 @@ export default function Register() {
           </h2>
 
           {devMode ? (
-            <div className="text-left bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-              <p className="text-sm font-semibold text-blue-800 mb-1">📮 Ethereal 임시 메일함으로 발송됨</p>
-              <p className="text-sm text-blue-600 mb-3">
+            <div className="text-left bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-semibold text-teal-800 mb-1">📮 Ethereal 임시 메일함으로 발송됨</p>
+              <p className="text-sm text-teal-600 mb-3">
                 아래 버튼으로 인증 메일을 확인하세요.
               </p>
 
@@ -61,7 +61,7 @@ export default function Register() {
                   href={verifyLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mb-2"
+                  className="flex items-center justify-center gap-2 w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mb-2"
                 >
                   📬 Ethereal 메일함에서 인증 메일 보기 →
                 </a>
@@ -80,7 +80,7 @@ export default function Register() {
                   🔗 인증 링크 직접 가져오기
                 </button>
               )}
-              <p className="text-xs text-blue-400 mt-1">
+              <p className="text-xs text-teal-400 mt-1">
                 실제 Gmail 발송: server/.env → SMTP_USER · SMTP_PASS 설정
               </p>
             </div>
@@ -97,7 +97,7 @@ export default function Register() {
                 try { await api.post('/auth/resend-verification', { email: form.email }); alert('재발송했습니다.'); }
                 catch { alert('잠시 후 다시 시도해주세요.'); }
               }}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-teal-600 hover:underline"
             >
               인증 메일 재발송
             </button>
@@ -131,7 +131,7 @@ export default function Register() {
               required
               autoComplete="email"
               placeholder="your@email.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -145,7 +145,7 @@ export default function Register() {
               required
               autoComplete="new-password"
               placeholder="••••••••"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -157,7 +157,7 @@ export default function Register() {
               required
               autoComplete="new-password"
               placeholder="••••••••"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -170,7 +170,7 @@ export default function Register() {
               onChange={set('nickname')}
               autoComplete="nickname"
               placeholder="연구자"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -183,7 +183,7 @@ export default function Register() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
+            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
           >
             {loading ? '처리 중...' : '이메일로 가입하기'}
           </button>
@@ -191,7 +191,7 @@ export default function Register() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           이미 계정이 있으신가요?{' '}
-          <Link to="/login" className="text-blue-600 hover:underline font-medium">
+          <Link to="/login" className="text-teal-600 hover:underline font-medium">
             로그인
           </Link>
         </p>

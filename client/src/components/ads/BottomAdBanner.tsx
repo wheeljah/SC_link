@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 
-const CTA_T = '무료로 시작하기';
 const CTA_U = 'https://ai-traffic.kr';
-const MSG   = '엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)';
+const MSG1  = '시약/장비 일단 띡! 견적요청만 올리면 됨';
+const MSG2  = '비드바이브(BidVibe)';
 
 export default function BottomAdBanner() {
   useEffect(() => {
-    document.body.style.paddingBottom = 'calc(64px + env(safe-area-inset-bottom, 0px))';
+    document.body.style.paddingBottom = 'calc(80px + env(safe-area-inset-bottom, 0px))';
     return () => { document.body.style.paddingBottom = '0px'; };
   }, []);
 
@@ -15,25 +15,26 @@ export default function BottomAdBanner() {
       href={CTA_U}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-0 left-0 right-0 z-[9998] flex items-center gap-2 px-3 bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+      className="fixed bottom-0 left-0 right-0 z-[9998] flex flex-col items-center justify-center px-4 shadow-[0_-4px_16px_rgba(0,0,0,0.24)]"
       style={{
-        minHeight: 64,
-        paddingTop: 10,
-        paddingBottom: 'env(safe-area-inset-bottom, 10px)',
+        backgroundColor: '#1e1b4b',
+        borderTop: '1px solid rgba(99,102,241,0.25)',
+        minHeight: 80,
+        paddingTop: 12,
+        paddingBottom: 'env(safe-area-inset-bottom, 12px)',
+        gap: 4,
       }}
     >
-      {/* 왼쪽: 광고 뱃지 + 메시지 2줄 */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-        <span className="w-fit text-[9px] font-bold border border-slate-300 text-slate-400 rounded px-1 leading-tight">
-          광고
-        </span>
-        <p className="text-sm font-bold text-slate-800 leading-snug">{MSG}</p>
-      </div>
-
-      {/* 오른쪽: CTA 버튼 — shrink-0으로 항상 표시 */}
-      <span className="shrink-0 bg-slate-900 text-white text-[11px] font-semibold px-3 py-2 rounded-lg whitespace-nowrap">
-        {CTA_T}
+      <span className="text-[9px] font-bold rounded px-1 leading-tight self-center"
+        style={{ border: '1px solid rgba(165,180,252,0.4)', color: 'rgba(165,180,252,0.7)' }}>
+        광고
       </span>
+      <p className="text-sm font-bold text-white text-center leading-snug break-keep">
+        {MSG1}
+      </p>
+      <p className="text-xs font-semibold text-indigo-300 text-center leading-snug">
+        {MSG2}
+      </p>
     </a>
   );
 }

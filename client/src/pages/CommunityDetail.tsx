@@ -68,7 +68,7 @@ export default function CommunityDetail() {
   };
 
   const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-    open:        { label: '요청 중',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    open:        { label: '요청 중',  cls: 'bg-teal-50 text-teal-700 border-teal-200' },
     in_progress: { label: '진행 중',  cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
     fulfilled:   { label: '완료',     cls: 'bg-green-50 text-green-700 border-green-200' },
     closed:      { label: '닫힘',     cls: 'bg-slate-50 text-slate-500 border-slate-200' },
@@ -132,10 +132,10 @@ export default function CommunityDetail() {
                   href={r.file_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
                 >
                   📎 파일 다운로드
-                  {r.file_size && <span className="text-blue-500">({(r.file_size / 1024 / 1024).toFixed(1)} MB)</span>}
+                  {r.file_size && <span className="text-teal-500">({(r.file_size / 1024 / 1024).toFixed(1)} MB)</span>}
                 </a>
               )}
             </div>
@@ -153,7 +153,7 @@ export default function CommunityDetail() {
               onChange={e => setMessage(e.target.value)}
               rows={3}
               placeholder="논문 링크나 메시지를 남겨주세요..."
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
             />
             <div>
               <label className="block text-sm text-slate-600 mb-1">파일 첨부 (PDF, ZIP 등)</label>
@@ -162,14 +162,14 @@ export default function CommunityDetail() {
                 type="file"
                 accept=".pdf,.zip,.rar,.tar,.gz"
                 onChange={e => setFile(e.target.files?.[0] || null)}
-                className="text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 file:font-medium file:cursor-pointer hover:file:bg-blue-100"
+                className="text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-700 file:font-medium file:cursor-pointer hover:file:bg-teal-100"
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
             >
               {submitting ? '등록 중...' : '응답 등록'}
             </button>
@@ -178,7 +178,7 @@ export default function CommunityDetail() {
       ) : (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
           <p className="text-sm text-slate-500 mb-3">응답하려면 로그인이 필요합니다.</p>
-          <Link to="/login" className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-block transition-colors">
+          <Link to="/login" className="text-sm bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg inline-block transition-colors">
             로그인
           </Link>
         </div>

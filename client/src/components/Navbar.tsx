@@ -63,7 +63,7 @@ export default function Navbar() {
               </Link>
               <Link
                 to="/register"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors"
+                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors"
               >
                 회원가입
               </Link>

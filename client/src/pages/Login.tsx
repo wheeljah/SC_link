@@ -62,13 +62,13 @@ export default function Login() {
               required
               autoComplete="email"
               placeholder="your@email.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-slate-700">비밀번호</label>
-              <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
+              <Link to="/forgot-password" className="text-xs text-teal-600 hover:underline">
                 비밀번호를 잊으셨나요?
               </Link>
             </div>
@@ -79,7 +79,7 @@ export default function Login() {
               required
               autoComplete="current-password"
               placeholder="••••••••"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -97,7 +97,7 @@ export default function Login() {
                       type="button"
                       onClick={handleResend}
                       disabled={resendStatus === 'sending'}
-                      className="text-xs text-blue-700 underline disabled:opacity-50"
+                      className="text-xs text-teal-700 underline disabled:opacity-50"
                     >
                       {resendStatus === 'sending' ? '발송 중...' : '인증 메일 재발송'}
                     </button>
@@ -110,7 +110,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
@@ -118,7 +118,7 @@ export default function Login() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           계정이 없으신가요?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline font-medium">
+          <Link to="/register" className="text-teal-600 hover:underline font-medium">
             회원가입
           </Link>
         </p>
