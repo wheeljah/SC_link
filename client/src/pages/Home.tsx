@@ -88,7 +88,7 @@ export default function Home() {
 
   const handleDownload = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (loading || !input.trim()) return;
     if (!isLoggedIn) {
       setShowAuth(true);
       return;
@@ -114,23 +114,18 @@ export default function Home() {
             placeholder="DOI, PMID, arXiv ID, 논문 제목, 또는 저널 URL 입력..."
             className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          {loading ? (
-            <button
-              type="button"
-              onClick={cancelDownload}
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors shrink-0"
-            >
-              검색 중지
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!input.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold px-6 py-3 rounded-xl transition-colors shrink-0"
-            >
-              다운로드
-            </button>
-          )}
+          <button
+            type={loading ? 'button' : 'submit'}
+            onClick={loading ? cancelDownload : undefined}
+            disabled={!loading && !input.trim()}
+            className={`font-semibold px-6 py-3 rounded-xl transition-colors shrink-0 text-white ${
+              loading
+                ? 'bg-red-500 hover:bg-red-600'
+                : 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400'
+            }`}
+          >
+            {loading ? '검색 중지' : '다운로드'}
+          </button>
         </div>
         <p className="text-xs text-slate-400 mt-2 px-1">
           예시: <code className="bg-slate-100 px-1 rounded">10.1038/nature12373</code>
