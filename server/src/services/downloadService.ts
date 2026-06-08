@@ -925,6 +925,15 @@ export async function downloadPaper(
   };
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
+  // --- 연도 사전 확인 (2022년 초과 논문은 Sci-Hub 건너뛼) ---
+  let paperYear: number | undefined;
+  try {
+    const meta = await fetchPaperMetadataFromS2(doi);
+    paperYear = meta?.year;
+  } catch { /* ignore */ }
+  const skipSciHub = paperYear !== undefined && paperYear > 2022;
+  if (skipSciHub) progress(`[skip] ${paperYear}년 논문 — Sci-Hub 건너뛼 (2022년 이후 미지원)`);
+
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
     ['OpenAlex',         () => downloadFromOpenAlex(doi)],
     ['Unpaywall',        () => downloadFromUnpaywall(doi)],
@@ -963,7 +972,7 @@ export async function downloadPaper(
   const { rows: runRows } = await pool.query(
     `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
   );
-  if (runRows.length > 0) {
+  if (runRows.length > 0 && !skipSciHub) {
     progress(`🔍 Sci-Hub API 캐시 확인 중...`);
     const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
     if (runResult) {
@@ -988,6 +997,7 @@ export async function downloadPaper(
   // 시도 순서: 책 챕터이면 Anna's Archive 우선, 그 다음 Sci-Hub → LibGen
   const remaining = servers
     .filter(s => !s.url.includes('sci-hub.run'))
+    .filter(s => !(skipSciHub && s.type === 'scihub'))
     .sort((a, b) => {
       if (isBookChapter) {
         const priority: Record<string, number> = { archive: 0, libgen: 1, scihub: 2, zlibrary: 3, ia: 4 };
