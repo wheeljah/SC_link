@@ -202,6 +202,7 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('Anna''s Archive .gl', 'https://annas-archive.gl', 'archive', false, 'International', 'annas-archive.org 차단(Jan 2026) 후 대체 미러'),
   ('Anna''s Archive .gd', 'https://annas-archive.gd', 'archive', false, 'International', 'Anna Archive 미러 (2026)'),
   ('Anna''s Archive .pk', 'https://annas-archive.pk', 'archive', false, 'International', '2026-03 공식 신규 도메인 (SLUM 모니터링)'),
+  ('Sci-Hub.kr',  'https://sci-hub.kr',  'scihub', false, 'International', '1순위 미러 — KR TLD'),
   ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요')
 ON CONFLICT DO NOTHING;
 

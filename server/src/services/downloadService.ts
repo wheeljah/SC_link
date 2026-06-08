@@ -1021,7 +1021,14 @@ export async function downloadPaper(
     .filter(s => !(s.url.includes('booksc.org') && !isBookChapter));
 
   // 타입별 버킷 — 각 라운드마다 1개씩 꺼내 병렬 경쟁
-  const shBucket    = remaining.filter(s => s.type === 'scihub');
+  // sci-hub.kr을 1순위로 고정
+  const shBucket    = remaining
+    .filter(s => s.type === 'scihub')
+    .sort((a, b) => {
+      if (a.url.includes('sci-hub.kr')) return -1;
+      if (b.url.includes('sci-hub.kr')) return  1;
+      return 0;
+    });
   const lgBucket    = remaining.filter(s => s.type === 'libgen');
   const aaBucket    = remaining.filter(s => s.type === 'archive');
   const otherBucket = remaining.filter(s => !['scihub', 'libgen', 'archive'].includes(s.type));
