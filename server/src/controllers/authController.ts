@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { pool } from '../db/pool';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService';
+import { sendVerificationEmail, sendPasswordResetEmail, getEmailProviderStatus } from '../services/emailService';
 import { signToken, AuthRequest } from '../middleware/auth';
 
 /** 이메일 발송에 타임아웃 적용 (15초 초과 시 오류 대신 경고만 남김) */
@@ -48,22 +48,33 @@ export async function register(req: Request, res: Response): Promise<void> {
     [userId, token]
   );
 
-  const isGmail = process.env.SMTP_USER && !process.env.SMTP_USER.includes('your_gmail');
+  const emailStatus = getEmailProviderStatus();
 
   let previewUrl: string | null = null;
+  let emailError: string | null = null;
   try {
     previewUrl = await sendVerificationEmailWithTimeout(email, token);
   } catch (err) {
-    console.error('이메일 발송 오류 (회원가입 계속 진행):', err);
-    // 이메일 실패해도 계정은 생성됨 — 재발송 안내
+    emailError = err instanceof Error ? err.message : String(err);
+    console.error('이메일 발송 오류 (회원가입 계속 진행):', emailError);
+  }
+
+  const emailSent = !emailError;
+  let message: string;
+  if (emailSent && emailStatus.provider === 'ethereal') {
+    message = '테스트 메일을 발송했습니다. 아래 미리보기 링크에서 확인하세요.';
+  } else if (emailSent) {
+    message = '인증 이메일을 발송했습니다. 받은 편지함을 확인해주세요.';
+  } else {
+    message = '계정이 생성되었으나 인증 이메일 발송에 실패했습니다. "인증 메일 재발송"을 시도하거나 관리자에게 문의하세요.';
   }
 
   res.status(201).json({
     success: true,
-    message: isGmail
-      ? '인증 이메일을 발송했습니다. 받은 편지함을 확인해주세요.'
-      : '테스트 메일을 발송했습니다. 아래 미리보기 링크에서 확인하세요.',
-    devMode: !isGmail,
+    emailSent,
+    emailProvider: emailStatus.provider,
+    message,
+    devMode: emailStatus.provider === 'ethereal',
     previewUrl,
   });
 }

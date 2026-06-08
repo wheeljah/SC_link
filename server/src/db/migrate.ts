@@ -259,6 +259,28 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
           WHERE url LIKE '%booksc.org%'`,
     params: [],
   },
+  // 중복 미러 정리: 같은 DB를 공유하는 미러 중 대표적 3개만 유지
+  // sci-hub: kr(directUrl용)·st(안정적)·sh(보백) 외 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
+          WHERE type = 'scihub'
+            AND url NOT IN ('https://sci-hub.kr','https://sci-hub.st','https://sci-hub.sh','https://sci-hub.run')`,
+    params: [],
+  },
+  // libgen: rs(가장 안정적)·st·library.lol(direct-proxy) 외 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
+          WHERE type = 'libgen'
+            AND url NOT IN ('https://libgen.rs','https://libgen.st','https://library.lol')`,
+    params: [],
+  },
+  // anna's archive: .gl(현 공식)·.pk(2026 신규) 외 비활성화
+  {
+    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
+          WHERE type = 'archive'
+            AND url NOT IN ('https://annas-archive.gl','https://annas-archive.pk')`,
+    params: [],
+  },
   // 배너 문구 최신화
   {
     sql: `UPDATE ad_banners SET message = $1

@@ -3,7 +3,7 @@ import { requireAuth } from '../middleware/auth';
 import {
   getStats, listUsers, listDownloads,
   exportUsers, exportDownloads,
-  deleteOldDownloads, deleteUser,
+  deleteOldDownloads, deleteUser, testConnectivity, testEmail,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -16,5 +16,7 @@ router.get('/export/users',      exportUsers);
 router.get('/export/downloads',  exportDownloads);
 router.delete('/downloads/old',  deleteOldDownloads);
 router.delete('/users/:id',      deleteUser);
+router.get('/connectivity',      testConnectivity);
+router.get('/test-email',        testEmail);
 
 export default router;

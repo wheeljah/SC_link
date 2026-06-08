@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { pool } from '../db/pool';
 import { AuthRequest } from '../middleware/auth';
+import { sendMail, getEmailProviderStatus } from '../services/emailService';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
 
@@ -123,4 +124,53 @@ export async function deleteUser(req: AuthRequest, res: Response): Promise<void>
   if (!id) { res.status(400).json({ success: false, message: 'Invalid id' }); return; }
   await pool.query('DELETE FROM users WHERE id = $1', [id]);
   res.json({ success: true });
+}
+
+export async function testConnectivity(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+  const targets = [
+    { name: 'sci-hub.kr',         url: 'https://sci-hub.kr/' },
+    { name: 'sci-hub.st',         url: 'https://sci-hub.st/' },
+    { name: 'libgen.rs',          url: 'https://libgen.rs/' },
+    { name: 'library.lol',        url: 'https://library.lol/' },
+    { name: 'annas-archive.gl',   url: 'https://annas-archive.gl/' },
+    { name: 'sci-hub.run',        url: 'https://sci-hub.run/' },
+    { name: 'unpaywall.org',      url: 'https://unpaywall.org/10.1038/nature12373?email=test@test.com' },
+    { name: 'openalex.org',       url: 'https://api.openalex.org/works/doi:10.1038/nature12373?select=id' },
+  ];
+  const axios = (await import('axios')).default;
+  const results = await Promise.all(targets.map(async t => {
+    try {
+      const r = await axios.get(t.url, { timeout: 8000, maxRedirects: 3,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        validateStatus: () => true });
+      const blocked = String(r.headers['x-proxy-error'] || '').includes('blocked');
+      return { name: t.name, status: r.status, blocked, ok: !blocked && r.status < 500 };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'error';
+      return { name: t.name, status: 0, blocked: msg.includes('blocked'), ok: false, error: msg.slice(0,60) };
+    }
+  }));
+  res.json({ success: true, timestamp: new Date().toISOString(), results });
+}
+
+export async function testEmail(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+  const status = getEmailProviderStatus();
+  if (!status.configured) {
+    res.status(503).json({ success: false, message: '이메일 설정이 없습니다.', status });
+    return;
+  }
+  const targetEmail = (req.query.to as string) || req.userEmail || ADMIN_EMAIL;
+  try {
+    await sendMail({
+      to: targetEmail,
+      subject: '[ScholarLink] 이메일 발송 테스트',
+      html: '<div style="font-family:sans-serif;padding:24px"><h3>✅ 이메일 발송 테스트 성공</h3><p>제공자: <b>' + status.provider + '</b></p><p>FROM: ' + status.from + '</p><p>TO: ' + targetEmail + '</p></div>',
+    });
+    res.json({ success: true, message: 'Test email sent to ' + targetEmail, provider: status.provider, from: status.from });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ success: false, message: '발송 실패: ' + msg, status });
+  }
 }

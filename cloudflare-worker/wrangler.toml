@@ -1,0 +1,9 @@
+name = "scholarlink-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[build]
+command = ""
+
+# 배포 후 Render 환경변수에 추가:
+# CF_PROXY_URL = https://scholarlink-proxy.{your-account}.workers.dev

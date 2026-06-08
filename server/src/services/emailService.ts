@@ -1,55 +1,58 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Gmail SMTP 설정 여부
+// Resend (1순위: HTTPS API, SMTP 포트/인증 문제 없음)
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
+// Gmail SMTP (2순위 폴백)
+// 주의: SMTP_FROM은 반드시 SMTP_USER와 동일한 Gmail 계정이어야 합니다.
+// 다른 도메인 FROM -> Gmail이 발송 거부
 const isGmailConfigured =
   !!process.env.SMTP_USER &&
   !!process.env.SMTP_PASS &&
   !process.env.SMTP_USER.includes('your_gmail') &&
   !process.env.SMTP_PASS.includes('your_gmail');
 
-// 실제 Gmail transporter
 const gmailTransporter = isGmailConfigured
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      connectionTimeout: 10000,   // 10s: TCP 연결
-      greetingTimeout:  10000,    // 10s: SMTP 핸드셰이크
-      socketTimeout:    15000,    // 15s: 데이터 전송
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     })
   : null;
 
-// Ethereal 테스트 계정 캐시 (프로세스 재시작마다 1회 생성)
+// Ethereal 테스트 계정 (개발 모드 전용)
 let etherealTransporter: nodemailer.Transporter | null = null;
-let etherealUser = '';
 
 async function getEtherealTransporter(): Promise<nodemailer.Transporter> {
   if (etherealTransporter) return etherealTransporter;
   const account = await nodemailer.createTestAccount();
-  etherealUser = account.user;
   etherealTransporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
     secure: false,
     auth: { user: account.user, pass: account.pass },
     connectionTimeout: 10000,
-    greetingTimeout:  10000,
-    socketTimeout:    15000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
-  console.log('\n📮 Ethereal 테스트 메일 계정 생성됨');
-  console.log(`   ID: ${account.user}`);
-  console.log(`   PW: ${account.pass}`);
-  console.log(`   받은편지함: https://ethereal.email/messages\n`);
+  console.log('\n[Email] Ethereal test account created');
+  console.log('   ID: ' + account.user);
+  console.log('   Inbox: https://ethereal.email/messages\n');
   return etherealTransporter;
 }
 
 const emailHtml = (title: string, body: string, btnText: string, btnUrl: string) => `
 <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff;border-radius:12px;">
-  <h2 style="color:#0f172a;margin-bottom:8px;">🔬 ScholarLink</h2>
+  <h2 style="color:#0f172a;margin-bottom:8px;">ScholarLink</h2>
   <h3 style="color:#1e40af;margin-top:0;">${title}</h3>
   <p style="color:#475569;">${body}</p>
   <a href="${btnUrl}"
@@ -62,40 +65,64 @@ const emailHtml = (title: string, body: string, btnText: string, btnUrl: string)
   </p>
 </div>`;
 
-// 발신자 주소: SMTP_FROM 설정 시 해당 주소 사용, 없으면 SMTP_USER
-const FROM_ADDRESS = process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@scholarlink.dev';
-const FROM_DISPLAY = `"ScholarLink" <${FROM_ADDRESS}>`;
+function getFromAddress(provider: 'resend' | 'gmail'): string {
+  if (provider === 'resend') {
+    return process.env.RESEND_FROM || 'ScholarLink <onboarding@resend.dev>';
+  }
+  // Gmail: FROM must match authenticated account (SMTP_FROM ignored)
+  return `"ScholarLink" <${process.env.SMTP_USER || ''}>`;
+}
 
-/** 메일 발송 공통 함수 — Gmail 우선, 없으면 Ethereal 자동 사용 */
-async function sendMail(opts: {
+export async function sendMail(opts: {
   to: string;
   subject: string;
   html: string;
 }): Promise<string | null> {
-  if (isGmailConfigured && gmailTransporter) {
-    console.log(`\n📤 Gmail 발송 시작`);
-    console.log(`   FROM : ${FROM_DISPLAY}`);
-    console.log(`   TO   : ${opts.to}`);
-    console.log(`   SUBJ : ${opts.subject}`);
-    await gmailTransporter.sendMail({
-      from: FROM_DISPLAY,
-      ...opts,
+  // 1순위: Resend
+  if (resendClient) {
+    console.log('[Email] Sending via Resend -> ' + opts.to);
+    const { error } = await resendClient.emails.send({
+      from: getFromAddress('resend'),
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
     });
-    console.log(`   ✅ 발송 완료 → ${opts.to}\n`);
-    return null; // 실제 발송 — 미리보기 URL 없음
+    if (error) throw new Error('Resend error: ' + error.message);
+    console.log('[Email] Resend sent OK');
+    return null;
   }
 
-  if (IS_PROD) throw new Error('SMTP 설정이 필요합니다. server/.env에 SMTP_USER, SMTP_PASS를 입력하세요.');
+  // 2순위: Gmail SMTP
+  if (isGmailConfigured && gmailTransporter) {
+    console.log('[Email] Sending via Gmail SMTP -> ' + opts.to);
+    await gmailTransporter.sendMail({
+      from: getFromAddress('gmail'),
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+    });
+    console.log('[Email] Gmail sent OK');
+    return null;
+  }
 
-  // 개발 모드: Ethereal로 자동 발송
+  if (IS_PROD) {
+    throw new Error(
+      'RESEND_API_KEY 또는 SMTP_USER/SMTP_PASS 환경변수가 설정되지 않았습니다. ' +
+      'Render 대시보드 -> Environment에서 설정하세요.'
+    );
+  }
+
+  // 개발 모드: Ethereal
   const t = await getEtherealTransporter();
   const info = await t.sendMail({
-    from: FROM_DISPLAY,
-    ...opts,
+    from: '"ScholarLink" <noreply@scholarlink.dev>',
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
   });
   const previewUrl = nodemailer.getTestMessageUrl(info) as string;
-  console.log(`\n📧 Ethereal 메일 발송됨 → ${previewUrl}\n`);
-  return previewUrl; // 미리보기 URL 반환
+  console.log('[Email] Ethereal preview: ' + previewUrl);
+  return previewUrl;
 }
 
 export async function sendVerificationEmail(email: string, token: string): Promise<string | null> {
@@ -124,4 +151,21 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
       link,
     ),
   });
+}
+
+export function getEmailProviderStatus(): {
+  provider: 'resend' | 'gmail' | 'ethereal' | 'none';
+  from: string;
+  configured: boolean;
+} {
+  if (resendClient) {
+    return { provider: 'resend', from: getFromAddress('resend'), configured: true };
+  }
+  if (isGmailConfigured) {
+    return { provider: 'gmail', from: getFromAddress('gmail'), configured: true };
+  }
+  if (!IS_PROD) {
+    return { provider: 'ethereal', from: 'noreply@scholarlink.dev', configured: true };
+  }
+  return { provider: 'none', from: '', configured: false };
 }
