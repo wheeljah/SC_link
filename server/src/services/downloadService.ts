@@ -626,7 +626,7 @@ async function downloadFromArxiv(doi: string): Promise<DownloadResult | null> {
   try {
     const res = await axios.get(
       `https://export.arxiv.org/api/query?search_query=doi:${encodeURIComponent(doi)}&max_results=1`,
-      { timeout: 8000, headers: { 'User-Agent': getUA() } }
+      { timeout: 8000, headers: { 'User-Agent': randomUA() } }
     );
     // arXiv Atom XML에서 ID 추출
     const idMatch = (res.data as string).match(/arxiv\.org\/abs\/([\d.]+(?:v\d+)?)/i);
@@ -649,7 +649,7 @@ async function downloadFromZenodo(doi: string): Promise<DownloadResult | null> {
       {
         timeout: 10000,
         params: { q: `doi:"${doi}"`, size: 3 },
-        headers: { 'User-Agent': getUA() },
+        headers: { 'User-Agent': randomUA() },
       }
     );
     const hits: any[] = res.data?.hits?.hits ?? [];
@@ -676,7 +676,7 @@ async function downloadFromBioRxiv(doi: string): Promise<DownloadResult | null> 
     try {
       const res = await axios.get(
         `https://api.biorxiv.org/details/${server}/${encodeURIComponent(doi)}/na/json`,
-        { timeout: 8000, headers: { 'User-Agent': getUA() } }
+        { timeout: 8000, headers: { 'User-Agent': randomUA() } }
       );
       const collection: any[] = res.data?.collection ?? [];
       if (!collection.length) continue;
