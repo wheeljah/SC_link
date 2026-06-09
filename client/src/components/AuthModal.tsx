@@ -66,7 +66,7 @@ export default function AuthModal({ open, onClose, onSuccess, title, description
           <div className="text-3xl mb-2">🔒</div>
           <h2 className="text-xl font-bold text-slate-900">{title || '로그인이 필요합니다'}</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {description || '검색과 다운로드는 로그인 후 이용할 수 있습니다.'}
+            {description || '검색은 로그인 후 이용할 수 있습니다.'}
           </p>
         </div>
 

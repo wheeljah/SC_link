@@ -32,7 +32,7 @@ export default function ServerStatus({ compact = false }: { compact?: boolean })
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-            <span>📡</span><span>다운로드 서버</span>
+            <span>📡</span><span>검색 서버</span>
           </h3>
         </div>
         <div className="divide-y divide-slate-50">
@@ -53,13 +53,13 @@ export default function ServerStatus({ compact = false }: { compact?: boolean })
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-          <span>📡</span><span>다운로드 서버</span>
+          <span>📡</span><span>검색 서버</span>
         </h3>
         <span className="text-xs text-green-600 font-medium">{servers.length}개 준비됨</span>
       </div>
 
       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-        <p className="text-xs text-slate-500">다운로드 요청 시 자동으로 최적 서버를 선택합니다.</p>
+        <p className="text-xs text-slate-500">검색 요청 시 자동으로 최적 서버를 선택합니다.</p>
       </div>
 
       <div className={compact ? 'max-h-72 overflow-y-auto' : ''}>
