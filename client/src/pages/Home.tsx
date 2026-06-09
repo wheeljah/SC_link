@@ -97,7 +97,7 @@ export default function Home() {
       }
     } catch (e) {
       if (!cancelledRef.current) {
-        setError('다운로드 중 오류가 발생했습니다.');
+        setError('검색 중 오류가 발생했습니다.');
       }
     } finally {
       if (cancelledRef.current) {
@@ -158,9 +158,9 @@ export default function Home() {
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       <div className="text-center py-6">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          학술논문/도서, 한 번에 검색/다운로드
+          학술논문/도서, 한 번에 검색
         </h1>
-        <p className="text-slate-500">DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 다운로드됩니다.</p>
+        <p className="text-slate-500">DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 검색가능합니다.</p>
       </div>
 
       <form onSubmit={handleDownload} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
@@ -182,7 +182,7 @@ export default function Home() {
                 : 'bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400'
             }`}
           >
-            {loading ? '검색 중지' : '다운로드'}
+            {loading ? '검색 중지' : '검색하기'}
           </button>
         </div>
         <p className="text-xs text-slate-400 mt-2 px-1">
@@ -248,7 +248,7 @@ export default function Home() {
                 {directUrl.includes('sci-hub') ? (
                   <>
                     <p className="text-sm font-semibold text-teal-800">Sci-Hub 직접 열기</p>
-                    <p className="text-xs text-teal-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 다운로드하세요.</p>
+                    <p className="text-xs text-teal-600 mt-1">서버 IP가 차단되어 브라우저에서 직접 열어보세요.</p>
                   </>
                 ) : directUrl.includes('doi.org') ? (
                   <>
@@ -282,7 +282,7 @@ export default function Home() {
           <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-green-800">다운로드 완료!</p>
+                <p className="text-sm font-semibold text-green-800">검색 완료!</p>
                 <p className="text-xs text-green-600 mt-1">DOI: {result.doi} &middot; {(result.fileSize / 1024 / 1024).toFixed(1)} MB</p>
               </div>
               <a
@@ -335,7 +335,7 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-slate-800">에러 보고</h3>
-            <p className="text-sm text-slate-500 mt-0.5">다운로드 실패, 오작동 등 문제를 알려주세요.</p>
+            <p className="text-sm text-slate-500 mt-0.5">검색 실패, 오작동 등 문제를 알려주세요.</p>
           </div>
           <button
             onClick={openReportForm}
@@ -349,7 +349,7 @@ export default function Home() {
           <form onSubmit={handleReportSubmit} className="space-y-3 mt-4 pt-4 border-t border-slate-100">
             <input
               type="text"
-              placeholder="제목 (예: 특정 DOI 다운로드 실패)"
+              placeholder="제목 (예: 특정 DOI 검색 실패)"
               value={reportForm.title}
               onChange={e => setReportForm(v => ({ ...v, title: e.target.value }))}
               className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -390,7 +390,7 @@ export default function Home() {
         open={showAuth}
         onClose={() => setShowAuth(false)}
         onSuccess={() => { setShowAuth(false); doDownload(); }}
-        description="논문 검색·다운로드는 로그인 후 이용할 수 있습니다."
+        description="논문 검색은 로그인 후 이용할 수 있습니다."
       />
     </div>
   );
