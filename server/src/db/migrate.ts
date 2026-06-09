@@ -176,11 +176,13 @@ CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
 
 -- 기본 서버 데이터 (2026-06 업데이트)
 INSERT INTO download_servers (name, url, type, requires_login, location, notes) VALUES
-  ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요'),
-  ('arXiv',            'https://arxiv.org',   'oa', false, 'International', '물리/수학/컴사이언스/경제 프리프린트 — API 기반'),
-  ('Zenodo',           'https://zenodo.org',  'oa', false, 'International', 'CERN 운영 오픈 리포지터리 — 전분야'),
-  ('bioRxiv',          'https://biorxiv.org', 'oa', false, 'International', '생명과학 프리프린트 서버 — biorXiv API'),
-  ('medRxiv',          'https://medrxiv.org', 'oa', false, 'International', '의학 프리프린트 서버 — biorXiv API')
+  ('Internet Archive', 'https://archive.org',              'ia',  false, 'International', 'Puppeteer 필요'),
+  ('arXiv',            'https://arxiv.org',                'oa',  false, 'International', '물리/수학/컴사이언스/경제 프리프린트 — API 기반'),
+  ('Zenodo',           'https://zenodo.org',               'oa',  false, 'International', 'CERN 운영 오픈 리포지터리 — 전분야'),
+  ('bioRxiv',          'https://biorxiv.org',              'oa',  false, 'International', '생명과학 프리프린트 서버 — biorXiv API'),
+  ('medRxiv',          'https://medrxiv.org',              'oa',  false, 'International', '의학 프리프린트 서버 — biorXiv API'),
+  ('OpenAIRE',         'https://api.openaire.eu',          'oa',  false, 'EU',            'EU 지원 연구 OA 저장소 — Graph API v1, 2500만+ 전문'),
+  ('OA.mg',            'https://api.oa.mg',                'oa',  false, 'International', '2.4억 논문 인덱스 — Unpaywall 유사 API, key 불필요')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너

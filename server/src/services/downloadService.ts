@@ -363,6 +363,144 @@ async function downloadFromCORE(doi: string): Promise<DownloadResult | null> {
 }
 
 
+// ─── OpenAIRE Graph API ──────────────────────────────────────────────────────
+// EU 지원 연구 중심 OA 저장소 — Graph API v1 (2026-05 이후 신규 엔드포인트)
+async function downloadFromOpenAIRE(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://api.openaire.eu/graph/v1/researchProducts',
+      {
+        params: {
+          doi,
+          type: 'publication',
+          pageSize: 1,
+          format: 'json',
+        },
+        timeout: 12000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+
+    const results: Array<{
+      mainTitle?: string;
+      publicationDate?: string;
+      authors?: Array<{ fullName?: string }>;
+      instances?: Array<{
+        urls?: string[];
+        accessRight?: { code?: string; label?: string };
+      }>;
+    }> = res.data?.results ?? [];
+
+    if (!results.length) { console.log(`[openaire] Not found: ${doi}`); return null; }
+
+    const paper = results[0];
+    const candidates: string[] = [];
+
+    // OPEN 인스턴스(code=c_abf2)의 URL 우선 수집
+    const openInstances = (paper.instances ?? []).filter(
+      i => i.accessRight?.code === 'c_abf2' || i.accessRight?.label === 'OPEN'
+    );
+    for (const inst of openInstances) {
+      for (const url of inst.urls ?? []) {
+        if (url && !candidates.includes(url)) candidates.push(url);
+      }
+    }
+    // 나머지 인스턴스도 시도
+    for (const inst of paper.instances ?? []) {
+      for (const url of inst.urls ?? []) {
+        if (url && !candidates.includes(url)) candidates.push(url);
+      }
+    }
+
+    const year = paper.publicationDate ? parseInt(paper.publicationDate.slice(0, 4)) : undefined;
+    const authors = (paper.authors ?? []).slice(0, 5).map(a => a.fullName ?? '').filter(Boolean).join(', ');
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'openaire_');
+      if (result) {
+        console.log(`[openaire] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: paper.mainTitle, authors, year };
+      }
+    }
+    console.log(`[openaire] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[openaire] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── OA.mg API ───────────────────────────────────────────────────────────────
+// 2.4억 논문 인덱스 — Unpaywall 유사 응답 구조, key 불필요
+async function downloadFromOAMG(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://api.oa.mg/v2/work`,
+      {
+        params: { doi },
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const data = res.data;
+
+    // PDF URL 후보 수집 (best_oa_location 우선)
+    const candidates: string[] = [];
+    if (data?.best_oa_location?.url_for_pdf) candidates.push(data.best_oa_location.url_for_pdf);
+    if (data?.best_oa_location?.url) candidates.push(data.best_oa_location.url);
+    for (const loc of data?.oa_locations ?? []) {
+      if (loc.url_for_pdf && !candidates.includes(loc.url_for_pdf)) candidates.push(loc.url_for_pdf);
+      if (loc.url && !candidates.includes(loc.url)) candidates.push(loc.url);
+    }
+
+    if (!candidates.length) { console.log(`[oamg] No OA PDF for ${doi}`); return null; }
+
+    const authors = (data?.z_authors ?? []).slice(0, 5)
+      .map((a: { given?: string; family?: string }) => [a.given, a.family].filter(Boolean).join(' '))
+      .filter(Boolean).join(', ');
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'oamg_');
+      if (result) {
+        console.log(`[oamg] ✅ PDF 확보: ${doi}`);
+        return {
+          ...result,
+          title:   data?.title   ?? undefined,
+          authors: authors       || undefined,
+          year:    data?.year    ?? undefined,
+          journal: data?.journal_name ?? undefined,
+        };
+      }
+    }
+
+    // 서버 차단으로 다운로드 불가 — directUrl 반환
+    if (candidates.length > 0) {
+      console.log(`[oamg] Server download blocked; returning directUrl: ${candidates[0]}`);
+      return {
+        filePath: '',
+        fileSize: 0,
+        directUrl: candidates[0],
+        title:   data?.title   ?? undefined,
+        authors: authors       || undefined,
+        year:    data?.year    ?? undefined,
+      };
+    }
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[oamg] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
 // ─── RISS (학술연구정보서비스) ─────────────────────────────────────────────
 // KCI(한국연구재단) 등재 국내 논문 full-text 접근
 async function downloadFromRISS(doi: string): Promise<DownloadResult | null> {
@@ -920,6 +1058,8 @@ export async function downloadPaper(
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
     ['OpenAlex',         () => downloadFromOpenAlex(doi)],
     ['Unpaywall',        () => downloadFromUnpaywall(doi)],
+    ['OA.mg',            () => downloadFromOAMG(doi)],
+    ['OpenAIRE',         () => downloadFromOpenAIRE(doi)],
     ['Semantic Scholar', () => downloadFromSemanticScholar(doi)],
     ['Europe PMC',       () => downloadFromEuropePMC(doi)],
     ['PMC OA',           () => downloadFromPMC(doi)],

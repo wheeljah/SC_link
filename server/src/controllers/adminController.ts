@@ -131,6 +131,8 @@ export async function testConnectivity(req: AuthRequest, res: Response): Promise
   const targets = [
     { name: 'unpaywall.org',      url: 'https://unpaywall.org/10.1038/nature12373?email=test@test.com' },
     { name: 'openalex.org',       url: 'https://api.openalex.org/works/doi:10.1038/nature12373?select=id' },
+    { name: 'openaire.eu',        url: 'https://api.openaire.eu/graph/v1/researchProducts?doi=10.1038/nature12373&type=publication&pageSize=1&format=json' },
+    { name: 'oa.mg',              url: 'https://api.oa.mg/v2/work?doi=10.1038/nature12373' },
   ];
   const axios = (await import('axios')).default;
   const results = await Promise.all(targets.map(async t => {
