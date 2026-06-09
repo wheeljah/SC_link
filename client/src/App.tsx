@@ -16,6 +16,7 @@ import CommunityDetail from './pages/CommunityDetail';
 import History from './pages/History';
 import BugReport from './pages/BugReport';
 import Admin from './pages/Admin';
+import Profile from './pages/Profile';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuth();
@@ -47,6 +48,9 @@ function Layout() {
           } />
           <Route path="/report" element={<BugReport />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/profile" element={
+            <PrivateRoute><Profile /></PrivateRoute>
+          } />
         </Routes>
       </main>
       <BottomAdBanner />

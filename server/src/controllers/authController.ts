@@ -251,6 +251,33 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
  * [개발 전용] SMTP 미설정 시 이메일 인증 링크를 직접 반환
  * 운영 환경(NODE_ENV=production)에서는 404 반환
  */
+export async function deleteMe(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.userId;
+  if (!userId) { res.status(401).json({ success: false, message: '인증이 필요합니다.' }); return; }
+
+  // 토큰 블랙리스트 등록
+  const header = req.headers.authorization?.slice(7);
+  if (header) {
+    try {
+      const jwt = require('jsonwebtoken');
+      const payload = jwt.decode(header) as { jti?: string; exp?: number };
+      if (payload?.jti && payload?.exp) {
+        await pool.query(
+          `INSERT INTO token_blacklist (token_jti, expires_at) VALUES ($1, to_timestamp($2)) ON CONFLICT DO NOTHING`,
+          [payload.jti, payload.exp]
+        );
+      }
+    } catch { /* silent */ }
+  }
+
+  // 관련 데이터 삭제 후 계정 삭제
+  await pool.query(`DELETE FROM bug_reports WHERE user_id = $1`, [userId]);
+  await pool.query(`DELETE FROM paper_requests WHERE user_id = $1`, [userId]);
+  await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+
+  res.json({ success: true, message: '계정이 삭제되었습니다.' });
+}
+
 export async function devGetVerifyLink(req: Request, res: Response): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     res.status(404).json({ success: false, message: 'Not found' });

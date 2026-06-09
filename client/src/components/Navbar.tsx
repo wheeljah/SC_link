@@ -32,9 +32,9 @@ export default function Navbar() {
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">
-              <span className="text-slate-500 hidden sm:block">
-                {user?.nickname || user?.email}
-              </span>
+              <Link to="/profile" className="text-slate-600 hover:text-slate-900 transition-colors hidden sm:block">
+                계정정보
+              </Link>
               <Link
                 to="/history"
                 className="text-slate-600 hover:text-slate-900 transition-colors"

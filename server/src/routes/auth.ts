@@ -3,7 +3,7 @@ import { authLimiter } from '../middleware/rateLimit';
 import { requireAuth } from '../middleware/auth';
 import {
   register, verifyEmail, resendVerification,
-  login, forgotPassword, resetPassword, logout, getMe,
+  login, forgotPassword, resetPassword, logout, getMe, deleteMe,
   devGetVerifyLink
 } from '../controllers/authController';
 
@@ -17,6 +17,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', authLimiter, resetPassword);
 router.post('/logout', requireAuth, logout);
 router.get('/me', requireAuth, getMe);
+router.delete('/me', requireAuth, deleteMe);
 router.get('/dev-verify-link', devGetVerifyLink); // 개발 전용
 
 export default router;
