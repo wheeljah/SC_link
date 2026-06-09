@@ -176,34 +176,11 @@ CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
 
 -- 기본 서버 데이터 (2026-06 업데이트)
 INSERT INTO download_servers (name, url, type, requires_login, location, notes) VALUES
-  ('Sci-Hub.run',  'https://sci-hub.run',  'scihub',  false, 'International', 'FastAPI 캐시 백엔드(fast.wbleb.com) -- 가장 빠름'),
-  ('Sci-Hub.sh',   'https://sci-hub.sh',   'scihub',  false, 'International', NULL),
-  ('Sci-Hub.wf',   'https://sci-hub.wf',   'scihub',  false, 'International', NULL),
-  ('Sci-Hub.ac',   'https://sci-hub.ac',   'scihub',  false, 'International', NULL),
-  ('Sci-Hub.st',   'https://sci-hub.st',   'scihub',  false, 'International', NULL),
-  ('Sci-Hub.ee',   'https://sci-hub.ee',   'scihub',  false, 'Europe',        'EU 최적화 미러'),
-  ('Sci-Hub.ru',   'https://sci-hub.ru',   'scihub',  false, 'Russia',        'Russia 최적화 미러 — 안정적'),
-  ('Sci-Hub.al',   'https://sci-hub.al',   'scihub',  false, 'International', '2026 신규 미러 (Albania TLD)'),
-  ('Sci-Hub.mk',   'https://sci-hub.mk',   'scihub',  false, 'International', '2026 신규 미러 (North Macedonia TLD)'),
-  ('Sci-Hub.ren',  'https://sci-hub.ren',  'scihub',  false, 'International', '2026 활성 미러'),
-  ('LibGen.li',    'http://libgen.li',      'libgen',  false, 'International', NULL),
-  ('LibGen.rs',    'https://libgen.rs',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.st',    'https://libgen.st',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.is',    'https://libgen.is',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.bz',    'https://libgen.bz',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.vg',    'https://libgen.vg',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.gl',    'https://libgen.gl',     'libgen',  false, 'International', 'scimag 엔드포인트'),
-  ('LibGen.la',    'https://libgen.la',     'libgen',  false, 'International', '2026년 5월 가장 안정적인 미러'),
-  ('LibGen.im',    'https://libgen.im',     'libgen',  false, 'International', '2026 활성 미러'),
-  ('Library.lol',  'https://library.lol',   'libgen',  false, 'International', 'libgen 직접 다운로드 프록시'),
-  ('BookSC.org',   'https://booksc.org',    'libgen',  false, 'International', NULL),
-  ('Z-Library (singlelogin)', 'https://singlelogin.re', 'zlibrary', true, 'International', '계정 필요'),
-  ('Sci-Hub.vkif.top', 'https://sci-hub.vkif.top', 'scihub',  false, 'International', 'SLUM 모니터링 미러 (2026)'),
-  ('Anna''s Archive .gl', 'https://annas-archive.gl', 'archive', false, 'International', 'annas-archive.org 차단(Jan 2026) 후 대체 미러'),
-  ('Anna''s Archive .gd', 'https://annas-archive.gd', 'archive', false, 'International', 'Anna Archive 미러 (2026)'),
-  ('Anna''s Archive .pk', 'https://annas-archive.pk', 'archive', false, 'International', '2026-03 공식 신규 도메인 (SLUM 모니터링)'),
-  ('Sci-Hub.kr',  'https://sci-hub.kr',  'scihub', false, 'International', '1순위 미러 — KR TLD'),
-  ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요')
+  ('Internet Archive', 'https://archive.org', 'ia', false, 'International', 'Puppeteer 필요'),
+  ('arXiv',            'https://arxiv.org',   'oa', false, 'International', '물리/수학/컴사이언스/경제 프리프린트 — API 기반'),
+  ('Zenodo',           'https://zenodo.org',  'oa', false, 'International', 'CERN 운영 오픈 리포지터리 — 전분야'),
+  ('bioRxiv',          'https://biorxiv.org', 'oa', false, 'International', '생명과학 프리프린트 서버 — biorXiv API'),
+  ('medRxiv',          'https://medrxiv.org', 'oa', false, 'International', '의학 프리프린트 서버 — biorXiv API')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너
@@ -226,59 +203,14 @@ ON CONFLICT DO NOTHING;
 // ── 런타임 업데이트 ─────────────────────────────────────────────────────────
 // INSERT의 ON CONFLICT DO NOTHING으로 처리 안 되는 기존 레코드 수정 사항
 const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
-  // sci-hub.se: 2026년 1월 Swedish registrar에 의해 차단됨 → 비활성화
+  // sci-hub 서버 전체 삭제
   {
-    sql: `UPDATE download_servers SET is_active = false
-          WHERE url = 'https://sci-hub.se'`,
+    sql: `DELETE FROM download_servers WHERE type = 'scihub'`,
     params: [],
   },
-  // annas-archive.org: 2026년 1월 registrar 차단 → .gl 미러 URL로 교체
+  // libgen / zlibrary / archive 서버 전체 삭제
   {
-    sql: `UPDATE download_servers
-          SET url = 'https://annas-archive.gl',
-              name = 'Anna''s Archive .gl',
-              notes = 'annas-archive.org 차단(Jan 2026) → .gl 미러로 교체'
-          WHERE url LIKE '%annas-archive.org%'`,
-    params: [],
-  },
-  // annas-archive.li: 2026-03-01 영구 삭제 → 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false
-          WHERE url LIKE '%annas-archive.li%'`,
-    params: [],
-  },
-  // annas-archive.pm: 2026-02 차단 → 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false
-          WHERE url LIKE '%annas-archive.pm%'`,
-    params: [],
-  },
-  // booksc.org: Render IP 차단(403 blocked-by-allowlist) — 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false
-          WHERE url LIKE '%booksc.org%'`,
-    params: [],
-  },
-  // 중복 미러 정리: 같은 DB를 공유하는 미러 중 대표적 3개만 유지
-  // sci-hub: kr(directUrl용)·st(안정적)·sh(보백) 외 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
-          WHERE type = 'scihub'
-            AND url NOT IN ('https://sci-hub.kr','https://sci-hub.st','https://sci-hub.sh','https://sci-hub.run')`,
-    params: [],
-  },
-  // libgen: rs(가장 안정적)·st·library.lol(direct-proxy) 외 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
-          WHERE type = 'libgen'
-            AND url NOT IN ('https://libgen.rs','https://libgen.st','https://library.lol')`,
-    params: [],
-  },
-  // anna's archive: .gl(현 공식)·.pk(2026 신규) 외 비활성화
-  {
-    sql: `UPDATE download_servers SET is_active = false, notes = COALESCE(notes,'') || ' [정리: 중복 미러]'
-          WHERE type = 'archive'
-            AND url NOT IN ('https://annas-archive.gl','https://annas-archive.pk')`,
+    sql: `DELETE FROM download_servers WHERE type IN ('libgen','zlibrary','archive')`,
     params: [],
   },
   // 배너 문구 최신화

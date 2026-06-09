@@ -129,12 +129,6 @@ export async function deleteUser(req: AuthRequest, res: Response): Promise<void>
 export async function testConnectivity(req: AuthRequest, res: Response): Promise<void> {
   if (!guard(req, res)) return;
   const targets = [
-    { name: 'sci-hub.kr',         url: 'https://sci-hub.kr/' },
-    { name: 'sci-hub.st',         url: 'https://sci-hub.st/' },
-    { name: 'libgen.rs',          url: 'https://libgen.rs/' },
-    { name: 'library.lol',        url: 'https://library.lol/' },
-    { name: 'annas-archive.gl',   url: 'https://annas-archive.gl/' },
-    { name: 'sci-hub.run',        url: 'https://sci-hub.run/' },
     { name: 'unpaywall.org',      url: 'https://unpaywall.org/10.1038/nature12373?email=test@test.com' },
     { name: 'openalex.org',       url: 'https://api.openalex.org/works/doi:10.1038/nature12373?select=id' },
   ];

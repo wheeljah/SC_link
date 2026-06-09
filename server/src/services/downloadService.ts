@@ -8,7 +8,6 @@ import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
 import { getAvailableServers, pickServer, ServerInfo } from './loadBalancerService';
-import { decrypt } from './encryptionService';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -159,22 +158,6 @@ async function downloadFileFromUrl(pdfUrl: string, doi: string, prefix = ''): Pr
     }
   }
   return null;
-}
-
-// ─── Credentials (Z-Library) ─────────────────────────────────────────────────
-async function getUserCredential(userId: number, serverId: number): Promise<{ loginId: string; password: string } | null> {
-  const { rows } = await pool.query(
-    `SELECT login_id, password_enc, enc_iv FROM user_server_credentials WHERE user_id=$1 AND server_id=$2`,
-    [userId, serverId]
-  );
-  if (!rows[0]) return null;
-  try {
-    const [ivHex, tagHex] = rows[0].enc_iv.split(':');
-    const password = decrypt(rows[0].password_enc, ivHex, tagHex);
-    return { loginId: rows[0].login_id, password };
-  } catch {
-    return null;
-  }
 }
 
 // ─── OA: Semantic Scholar ─────────────────────────────────────────────────────
@@ -638,127 +621,77 @@ async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<Down
   return null;
 }
 
-// ─── LibGen ─────────────────────────────────────────────────────────────────
-async function downloadFromLibGen(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
+// ─── OA: arXiv ──────────────────────────────────────────────────────────────
+async function downloadFromArxiv(doi: string): Promise<DownloadResult | null> {
   try {
-    let searchUrl: string;
-    // libgen.rs / libgen.st / libgen.is use /scimag endpoint
-    if (server.url.includes('scimag') || server.url.match(/libgen\.(rs|st|is|li|la|gl|bz|vg)/)) {
-      const base = server.url.replace(/\/scimag.*$/, '');
-      searchUrl = `${base}/scimag/?req=${encodeURIComponent(doi)}&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def`;
-    } else {
-      searchUrl = `${server.url}?s=${encodeURIComponent(doi)}`;
-    }
-
-    const res = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(res);
-
-    let pdfLink = $('a[href*=".pdf"]').first().attr('href');
-    if (!pdfLink) pdfLink = $('a[href*="/get"]').first().attr('href');
-    if (!pdfLink) pdfLink = $('tr td a[href*="download"]').first().attr('href');
-    if (!pdfLink) {
-      // library.lol style: direct download link in table
-      $('td a[href^="http"]').each((_: number, el: unknown) => {
-        if (pdfLink) return false; // break
-        const href = $(el as Parameters<typeof $>[0]).attr('href') || '';
-        if (href.includes('library.lol') || href.includes('libgen') || href.endsWith('.pdf')) {
-          pdfLink = href;
-        }
-      });
-    }
-    if (!pdfLink) return null;
-
-    const fullUrl = pdfLink.startsWith('http') ? pdfLink : `${server.url}${pdfLink}`;
-
-    // library.lol returns an intermediate download page — follow it
-    if (fullUrl.includes('library.lol') || fullUrl.includes('get.php')) {
-      const dlPage = await cloudscraper.get(fullUrl) as string;
-      const $dl = cheerio.load(dlPage);
-      const directLink = $dl('a[href*=".pdf"]').first().attr('href') ||
-                         $dl('h2 a').first().attr('href');
-      if (directLink) return await downloadFileFromUrl(
-        directLink.startsWith('http') ? directLink : `${fullUrl}${directLink}`, doi, 'libgen_'
-      );
-    }
-
-    return await downloadFileFromUrl(fullUrl, doi, 'libgen_');
-  } catch {
+    const res = await axios.get(
+      `https://export.arxiv.org/api/query?search_query=doi:${encodeURIComponent(doi)}&max_results=1`,
+      { timeout: 8000, headers: { 'User-Agent': getUA() } }
+    );
+    // arXiv Atom XML에서 ID 추출
+    const idMatch = (res.data as string).match(/arxiv\.org\/abs\/([\d.]+(?:v\d+)?)/i);
+    if (!idMatch) { console.log(`[arxiv] No match for DOI: ${doi}`); return null; }
+    const arxivId = idMatch[1].replace(/v\d+$/, '');
+    const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
+    console.log(`[arxiv] ${doi} → ${arxivId}: ${pdfUrl}`);
+    return await downloadFileFromUrl(pdfUrl, doi, 'arxiv_');
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[arxiv] ${e.response?.status} ${e.message}`);
     return null;
   }
 }
 
-// ─── Anna's Archive ───────────────────────────────────────────────────────────
-// annas-archive.org는 2026년 1월 차단됨 — server.url 사용 (.gl/.gd 미러)
-async function downloadFromAnnasArchive(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
-  const base = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
+// ─── OA: Zenodo ─────────────────────────────────────────────────────────────
+async function downloadFromZenodo(doi: string): Promise<DownloadResult | null> {
   try {
-    // 1단계: DOI로 검색
-    const searchUrl = `${base}/search?q=${encodeURIComponent(doi)}&content_type=pdf`;
-    const pageHtml = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(pageHtml);
-
-    const firstResult = $('a[href*="/md5/"]').first().attr('href');
-    if (!firstResult) return null;
-
-    const md5PageUrl = firstResult.startsWith('http') ? firstResult : `${base}${firstResult}`;
-    const md5Html = await cloudscraper.get(md5PageUrl) as string;
-    const $$ = cheerio.load(md5Html);
-
-    // 2단계: 직접 다운로드 링크 수집 (우선순위순)
-    const candidates: string[] = [];
-
-    // fast_download (직접 PDF, 가장 신뢰도 높음)
-    $$('a[href*="/fast_download/"]').each((_: number, el: Parameters<typeof $$>[0]) => {
-      const href = $$(el).attr('href');
-      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
-    });
-    // /download/ 링크
-    $$('a[href*="/download/"]').each((_: number, el: Parameters<typeof $$>[0]) => {
-      const href = $$(el).attr('href');
-      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
-    });
-    // .pdf 직접 링크
-    $$('a[href$=".pdf"]').each((_: number, el: Parameters<typeof $$>[0]) => {
-      const href = $$(el).attr('href');
-      if (href) candidates.push(href.startsWith('http') ? href : `${base}${href}`);
-    });
-
-    for (const url of candidates) {
-      const result = await downloadFileFromUrl(url, doi, 'annas_');
+    const res = await axios.get(
+      'https://zenodo.org/api/records',
+      {
+        timeout: 10000,
+        params: { q: `doi:"${doi}"`, size: 3 },
+        headers: { 'User-Agent': getUA() },
+      }
+    );
+    const hits: any[] = res.data?.hits?.hits ?? [];
+    if (!hits.length) { console.log(`[zenodo] Not found: ${doi}`); return null; }
+    for (const record of hits) {
+      const files: any[] = record.files ?? [];
+      const pdfFile = files.find((f: any) => f.type === 'pdf' || (f.key as string)?.endsWith('.pdf'));
+      const pdfUrl: string | undefined = pdfFile?.links?.self;
+      if (!pdfUrl) continue;
+      console.log(`[zenodo] ${doi} → ${pdfUrl}`);
+      const result = await downloadFileFromUrl(pdfUrl, doi, 'zenodo_');
       if (result) return result;
     }
     return null;
-  } catch {
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[zenodo] ${e.response?.status} ${e.message}`);
     return null;
   }
 }
 
-// ─── Z-Library ───────────────────────────────────────────────────────────────
-async function downloadFromZlibrary(doi: string, server: ServerInfo, userId: number): Promise<DownloadResult | null> {
-  const cred = await getUserCredential(userId, server.id);
-  if (!cred) return null;
-
-  try {
-    const base = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
-    const searchUrl = `${base}/search?q=${encodeURIComponent(doi)}`;
-    const pageHtml = await cloudscraper.get(searchUrl) as string;
-    const $ = cheerio.load(pageHtml);
-
-    const firstLink = $('a[href*="/book/"]').first().attr('href');
-    if (!firstLink) return null;
-
-    const bookPageUrl = firstLink.startsWith('http') ? firstLink : `${server.url}${firstLink}`;
-    const bookHtml = await cloudscraper.get(bookPageUrl) as string;
-    const $$ = cheerio.load(bookHtml);
-
-    const dlBtn = $$('a[href*="/download/"]').first().attr('href');
-    if (!dlBtn) return null;
-
-    const dlUrl = dlBtn.startsWith('http') ? dlBtn : `${server.url}${dlBtn}`;
-    return await downloadFileFromUrl(dlUrl, doi, 'zlib_');
-  } catch {
-    return null;
+// ─── OA: bioRxiv / medRxiv ──────────────────────────────────────────────────
+async function downloadFromBioRxiv(doi: string): Promise<DownloadResult | null> {
+  for (const server of ['biorxiv', 'medrxiv'] as const) {
+    try {
+      const res = await axios.get(
+        `https://api.biorxiv.org/details/${server}/${encodeURIComponent(doi)}/na/json`,
+        { timeout: 8000, headers: { 'User-Agent': getUA() } }
+      );
+      const collection: any[] = res.data?.collection ?? [];
+      if (!collection.length) continue;
+      // 최신 버전 우선
+      const latest = collection.sort((a, b) => Number(b.version ?? 0) - Number(a.version ?? 0))[0];
+      const baseUrl = server === 'biorxiv' ? 'https://www.biorxiv.org' : 'https://www.medrxiv.org';
+      const pdfUrl = `${baseUrl}/content/${latest.doi}v${latest.version}.full.pdf`;
+      console.log(`[${server}] ${doi} → ${pdfUrl}`);
+      const result = await downloadFileFromUrl(pdfUrl, doi, `${server}_`);
+      if (result) return result;
+    } catch (e) {
+      if (axios.isAxiosError(e)) console.log(`[${server}] ${e.response?.status} ${e.message}`);
+    }
   }
+  return null;
 }
 
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
@@ -939,7 +872,7 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(
   doi: string,
-  userId: number,
+  _userId: number,
   onProgress?: (msg: string) => void,
   signal?: { cancelled: boolean }
 ): Promise<DownloadResult> {
@@ -991,6 +924,9 @@ export async function downloadPaper(
     ['Europe PMC',       () => downloadFromEuropePMC(doi)],
     ['PMC OA',           () => downloadFromPMC(doi)],
     ['CORE',             () => downloadFromCORE(doi)],
+    ['arXiv',            () => downloadFromArxiv(doi)],
+    ['Zenodo',           () => downloadFromZenodo(doi)],
+    ['bioRxiv/medRxiv',  () => downloadFromBioRxiv(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
@@ -1040,7 +976,7 @@ export async function downloadPaper(
     }
   }
 
-  // ─── Phase 3: 병렬 미러 (sci-hub/libgen/archive) — cloudscraper는 CF proxy 우회 불가,
+  // ─── Phase 3: 병렬 미러 (sci-hub) — cloudscraper는 CF proxy 우회 불가,
   //              현재 비활성화. CF Worker + headless-fetch 방식 지원 시 재활성화 예정.
 
   // ─── 최종 폴백 ──────────────────────────────────────────────────────────────────
@@ -1049,6 +985,6 @@ export async function downloadPaper(
     progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
     return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
   }
-  progress(`🔗 OA 없음 — Sci-Hub 직접 열기 제공 (브라우저 사용 권장)`);
-  return { filePath: '', fileSize: 0, directUrl: `https://sci-hub.kr/${doi}` };
+  progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
+  return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
 }
