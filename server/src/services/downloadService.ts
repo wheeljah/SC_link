@@ -1137,40 +1137,6 @@ async function downloadFromDataCite(doi: string): Promise<DownloadResult | null>
   }
 }
 
-// ─── ScienceON (KISTI) ───────────────────────────────────────────────────────
-// 국내 과기 논문 전문 + DOI센터. SCIENCEON_API_KEY 필요(미설정 시 건너뜀).
-// NOTE: 실제 토큰/필드 매핑은 발급받은 키로 1회 검증 필요(KISTI API Gateway 규격).
-async function downloadFromScienceON(doi: string): Promise<DownloadResult | null> {
-  const apiKey = process.env.SCIENCEON_API_KEY;
-  if (!apiKey) { console.log('[scienceon] SCIENCEON_API_KEY not set. Skipping.'); return null; }
-  try {
-    const res = await axios.get(
-      'https://apigateway.kisti.re.kr/openapicall.do',
-      {
-        timeout: 12000,
-        params: {
-          client_id: apiKey,
-          version: '1.0',
-          action: 'search',
-          target: 'ARTI',
-          searchQuery: JSON.stringify({ DOI: doi }),
-        },
-        headers: { 'User-Agent': randomUA(), 'Accept': 'application/json' },
-      }
-    );
-    // KISTI 응답은 XML/JSON 혼재 가능 — 전문 링크(원문 URL) 추출 시도
-    const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-    const m = body.match(/https?:\/\/[^"'<>\s]+\.pdf/i);
-    if (!m) { console.log(`[scienceon] No fulltext PDF for ${doi}`); return null; }
-    const result = await downloadFileFromUrl(m[0], doi, 'scienceon_');
-    if (result) { console.log(`[scienceon] ✅ PDF 확보: ${doi}`); return result; }
-    return null;
-  } catch (e) {
-    if (axios.isAxiosError(e)) console.log(`[scienceon] ${e.response?.status} ${e.message}`);
-    return null;
-  }
-}
-
 // ─── KCI (한국연구재단 학술지인용색인) ───────────────────────────────────────
 // KCI_API_KEY 필요(미설정 시 건너뜀). KCI는 전문 PDF를 직접 호스팅하지 않아
 // 대개 메타데이터/랜딩만 제공 — 직접 PDF가 노출될 때만 다운로드 성공.
@@ -1469,9 +1435,8 @@ export async function downloadPaper(
     progress(`✗ RISS — 오류`);
   }
 
-  // ─── Phase 1.6: ScienceON / KCI (국내 학술 API — API 키 필요 시에만 동작) ───
+  // ─── Phase 1.6: KCI (국내 학술 API — API 키 필요 시에만 동작) ───
   for (const [name, fn] of [
-    ['ScienceON', () => downloadFromScienceON(doi)],
     ['KCI',       () => downloadFromKCI(doi)],
   ] as Array<[string, () => Promise<DownloadResult | null>]>) {
     checkCancelled();
@@ -1522,4 +1487,4 @@ export async function downloadPaper(
 }
 // OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
 // PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
-// Crossref TDM, ScienceON(키), KCI(키)
+// Crossref TDM, KCI(키)
