@@ -137,6 +137,8 @@ export async function testConnectivity(req: AuthRequest, res: Response): Promise
     { name: 'fatcat.wiki',        url: 'https://api.fatcat.wiki/v0/release/lookup?doi=10.1038/nature12373' },
     { name: 'archives-ouvertes.fr', url: 'https://api.archives-ouvertes.fr/search/?q=*:*&fq=doiId_s:%2210.1038/nature12373%22&rows=1&wt=json' },
     { name: 'crossref.org',       url: 'https://api.crossref.org/works/10.1038/nature12373' },
+    { name: 'osf.io',             url: 'https://api.osf.io/v2/preprints/?filter[doi]=10.31234/osf.io/abc12&page[size]=1' },
+    { name: 'datacite.org',       url: 'https://api.datacite.org/dois/10.5281/zenodo.31780' },
   ];
   const axios = (await import('axios')).default;
   const results = await Promise.all(targets.map(async t => {

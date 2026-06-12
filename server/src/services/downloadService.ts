@@ -1039,6 +1039,168 @@ async function downloadFromHAL(doi: string): Promise<DownloadResult | null> {
   }
 }
 
+// ─── OSF Preprints (api.osf.io) ──────────────────────────────────────────────
+// PsyArXiv·SocArXiv·EngrXiv·MetaArXiv 등 다수 프리프린트 커뮤니티 통합. key 불필요.
+async function downloadFromOSF(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://api.osf.io/v2/preprints/',
+      {
+        timeout: 12000,
+        params: { 'filter[doi]': doi, 'page[size]': 1 },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/vnd.api+json',
+        },
+      }
+    );
+    const data: any[] = res.data?.data ?? [];
+    if (!data.length) { console.log(`[osf] Not found: ${doi}`); return null; }
+
+    const pp = data[0];
+    const attrs = pp.attributes ?? {};
+    // primary_file 리소스 → links.download 가 실제 PDF
+    const fileHref: string | undefined = pp.relationships?.primary_file?.links?.related?.href;
+    const candidates: string[] = [];
+    if (fileHref) {
+      try {
+        const fileRes = await axios.get(fileHref, {
+          timeout: 10000,
+          headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/vnd.api+json' },
+        });
+        const dl: string | undefined = fileRes.data?.data?.links?.download;
+        if (dl) candidates.push(dl);
+      } catch { /* primary_file 조회 실패 시 무시 */ }
+    }
+    if (attrs.doi && pp.id) candidates.push(`https://osf.io/download/${pp.id}/`);
+    if (!candidates.length) { console.log(`[osf] No downloadable file for ${doi}`); return null; }
+
+    const year = attrs.date_published ? parseInt(String(attrs.date_published).slice(0, 4)) : undefined;
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'osf_');
+      if (result) {
+        console.log(`[osf] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: attrs.title, year };
+      }
+    }
+    console.log(`[osf] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[osf] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── DataCite (api.datacite.org) ─────────────────────────────────────────────
+// 데이터셋·학위논문·기관 리포지터리 DOI 다수. contentUrl[] = 직접 파일, url = 랜딩. key 불필요.
+async function downloadFromDataCite(doi: string): Promise<DownloadResult | null> {
+  try {
+    // DataCite는 path에 raw DOI(슬래시 포함)를 그대로 사용
+    const res = await axios.get(
+      `https://api.datacite.org/dois/${doi}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/vnd.api+json',
+        },
+      }
+    );
+    const attr = res.data?.data?.attributes;
+    if (!attr) { console.log(`[datacite] Not found: ${doi}`); return null; }
+
+    const candidates: string[] = [];
+    for (const u of (attr.contentUrl ?? []) as string[]) if (u && !candidates.includes(u)) candidates.push(u);
+    if (attr.url && !candidates.includes(attr.url)) candidates.push(attr.url);
+    if (!candidates.length) { console.log(`[datacite] No content URL for ${doi}`); return null; }
+
+    const title = Array.isArray(attr.titles) ? attr.titles[0]?.title : undefined;
+    const authors = (attr.creators ?? []).slice(0, 5)
+      .map((c: { name?: string }) => c.name).filter(Boolean).join(', ');
+    const year = attr.publicationYear;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'datacite_');
+      if (result) {
+        console.log(`[datacite] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year };
+      }
+    }
+    console.log(`[datacite] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[datacite] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── ScienceON (KISTI) ───────────────────────────────────────────────────────
+// 국내 과기 논문 전문 + DOI센터. SCIENCEON_API_KEY 필요(미설정 시 건너뜀).
+// NOTE: 실제 토큰/필드 매핑은 발급받은 키로 1회 검증 필요(KISTI API Gateway 규격).
+async function downloadFromScienceON(doi: string): Promise<DownloadResult | null> {
+  const apiKey = process.env.SCIENCEON_API_KEY;
+  if (!apiKey) { console.log('[scienceon] SCIENCEON_API_KEY not set. Skipping.'); return null; }
+  try {
+    const res = await axios.get(
+      'https://apigateway.kisti.re.kr/openapicall.do',
+      {
+        timeout: 12000,
+        params: {
+          client_id: apiKey,
+          version: '1.0',
+          action: 'search',
+          target: 'ARTI',
+          searchQuery: JSON.stringify({ DOI: doi }),
+        },
+        headers: { 'User-Agent': randomUA(), 'Accept': 'application/json' },
+      }
+    );
+    // KISTI 응답은 XML/JSON 혼재 가능 — 전문 링크(원문 URL) 추출 시도
+    const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    const m = body.match(/https?:\/\/[^"'<>\s]+\.pdf/i);
+    if (!m) { console.log(`[scienceon] No fulltext PDF for ${doi}`); return null; }
+    const result = await downloadFileFromUrl(m[0], doi, 'scienceon_');
+    if (result) { console.log(`[scienceon] ✅ PDF 확보: ${doi}`); return result; }
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[scienceon] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── KCI (한국연구재단 학술지인용색인) ───────────────────────────────────────
+// KCI_API_KEY 필요(미설정 시 건너뜀). KCI는 전문 PDF를 직접 호스팅하지 않아
+// 대개 메타데이터/랜딩만 제공 — 직접 PDF가 노출될 때만 다운로드 성공.
+async function downloadFromKCI(doi: string): Promise<DownloadResult | null> {
+  const apiKey = process.env.KCI_API_KEY;
+  if (!apiKey) { console.log('[kci] KCI_API_KEY not set. Skipping.'); return null; }
+  try {
+    const res = await axios.get(
+      'https://open.kci.go.kr/po/openapi/openApiSearch.kci',
+      {
+        timeout: 12000,
+        params: { apiCode: 'articleSearch', key: apiKey, doi },
+        headers: { 'User-Agent': randomUA(), 'Accept': 'application/xml' },
+      }
+    );
+    const xml = typeof res.data === 'string' ? res.data : '';
+    if (!xml) { console.log(`[kci] Empty response for ${doi}`); return null; }
+    const $ = cheerio.load(xml, { xmlMode: true });
+    // 직접 PDF 링크가 있을 때만 다운로드(없으면 null로 다음 소스 진행)
+    const pdfUrl = $('url:contains(".pdf"), fullTextUrl, pdfUrl').first().text().trim();
+    if (!pdfUrl || !/\.pdf/i.test(pdfUrl)) { console.log(`[kci] No direct PDF for ${doi}`); return null; }
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'kci_');
+    if (result) { console.log(`[kci] ✅ PDF 확보: ${doi}`); return result; }
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[kci] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
 interface UnpaywallLocation {
   url?: string;
@@ -1274,7 +1436,9 @@ export async function downloadPaper(
     ['DOAJ',             () => downloadFromDOAJ(doi)],
     ['arXiv',            () => downloadFromArxiv(doi)],
     ['Zenodo',           () => downloadFromZenodo(doi)],
+    ['DataCite',         () => downloadFromDataCite(doi)],
     ['bioRxiv/medRxiv',  () => downloadFromBioRxiv(doi)],
+    ['OSF Preprints',    () => downloadFromOSF(doi)],
     ['IA Scholar',       () => downloadFromFatcat(doi)],
     ['HAL',              () => downloadFromHAL(doi)],
     ['Crossref TDM',     () => downloadFromCrossref(doi)],
@@ -1303,6 +1467,23 @@ export async function downloadPaper(
   } catch (e) {
     if ((e as Error).message === '검색이 중지되었습니다.') throw e;
     progress(`✗ RISS — 오류`);
+  }
+
+  // ─── Phase 1.6: ScienceON / KCI (국내 학술 API — API 키 필요 시에만 동작) ───
+  for (const [name, fn] of [
+    ['ScienceON', () => downloadFromScienceON(doi)],
+    ['KCI',       () => downloadFromKCI(doi)],
+  ] as Array<[string, () => Promise<DownloadResult | null>]>) {
+    checkCancelled();
+    progress(`🔍 ${name} 확인 중...`);
+    try {
+      const r = await fn();
+      if (r) { progress(`✅ ${name} — PDF 확보`); return r; }
+      progress(`✗ ${name} — 없음`);
+    } catch (e) {
+      if ((e as Error).message === '검색이 중지되었습니다.') throw e;
+      progress(`✗ ${name} — 오류`);
+    }
   }
 
   // ─── Phase 2: Sci-Hub.run API (CF proxy 경유 — Render IP 차단 우회) ──────────────
@@ -1340,4 +1521,5 @@ export async function downloadPaper(
   return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
 }
 // OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
-// PMC OA, CORE, DOAJ, arXiv, Zenodo, bioRxiv/medRxiv, IA Scholar, HAL, Crossref TDM
+// PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
+// Crossref TDM, ScienceON(키), KCI(키)
