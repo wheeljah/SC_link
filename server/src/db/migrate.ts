@@ -182,7 +182,11 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('bioRxiv',          'https://biorxiv.org',              'oa',  false, 'International', '생명과학 프리프린트 서버 — biorXiv API'),
   ('medRxiv',          'https://medrxiv.org',              'oa',  false, 'International', '의학 프리프린트 서버 — biorXiv API'),
   ('OpenAIRE',         'https://api.openaire.eu',          'oa',  false, 'EU',            'EU 지원 연구 OA 저장소 — Graph API v1, 2500만+ 전문'),
-  ('OA.mg',            'https://api.oa.mg',                'oa',  false, 'International', '2.4억 논문 인덱스 — Unpaywall 유사 API, key 불필요')
+  ('OA.mg',            'https://api.oa.mg',                'oa',  false, 'International', '2.4억 논문 인덱스 — Unpaywall 유사 API, key 불필요'),
+  ('DOAJ',             'https://doaj.org',                 'oa',  false, 'International', '순수 OA 저널 색인 — rate limit 없음, key 불필요'),
+  ('IA Scholar',       'https://scholar.archive.org',      'oa',  false, 'International', 'Internet Archive 보존 2500만+ 전문 — fatcat API, 폐간 논문 강점'),
+  ('HAL',              'https://api.archives-ouvertes.fr', 'oa',  false, 'France',        '프랑스 국립 OA 저장소 — 유럽 연구 전문, key 불필요'),
+  ('Crossref TDM',     'https://api.crossref.org',         'oa',  false, 'International', '출판사 등록 text-mining 전문 링크 — key 불필요')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너

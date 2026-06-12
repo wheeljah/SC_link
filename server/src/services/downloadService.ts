@@ -832,6 +832,213 @@ async function downloadFromBioRxiv(doi: string): Promise<DownloadResult | null> 
   return null;
 }
 
+// ─── Crossref (TDM full-text links) ──────────────────────────────────────────
+// 출판사가 메타데이터에 직접 등록한 text-mining 전문(PDF) 링크 — key 불필요.
+// 일부 진성 OA 출판사(Frontiers, MDPI, Hindawi 등)는 직접 PDF URL 제공.
+async function downloadFromCrossref(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const msg = res.data?.message;
+    if (!msg) { console.log(`[crossref] Not found: ${doi}`); return null; }
+
+    const links: Array<{ URL?: string; 'content-type'?: string; 'intended-application'?: string }> =
+      msg.link ?? [];
+    // PDF content-type 우선, 그다음 text-mining 용도 링크
+    const pdfLinks = links.filter(l => l['content-type'] === 'application/pdf');
+    const tdmLinks = links.filter(
+      l => l['intended-application'] === 'text-mining' && !pdfLinks.includes(l)
+    );
+    const candidates = [...pdfLinks, ...tdmLinks].map(l => l.URL).filter(Boolean) as string[];
+    if (!candidates.length) { console.log(`[crossref] No full-text link for ${doi}`); return null; }
+
+    const title = Array.isArray(msg.title) ? msg.title[0] : msg.title;
+    const authors = (msg.author ?? []).slice(0, 5)
+      .map((a: { given?: string; family?: string }) => [a.given, a.family].filter(Boolean).join(' '))
+      .filter(Boolean).join(', ');
+    const year = msg.published?.['date-parts']?.[0]?.[0]
+      ?? msg.issued?.['date-parts']?.[0]?.[0];
+    const journal = Array.isArray(msg['container-title']) ? msg['container-title'][0] : undefined;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'crossref_');
+      if (result) {
+        console.log(`[crossref] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year, journal };
+      }
+    }
+    console.log(`[crossref] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[crossref] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── DOAJ (Directory of Open Access Journals) ────────────────────────────────
+// 순수 OA 저널 색인 — rate limit 없음, key 불필요. bibjson.link[].type = 'fulltext'.
+async function downloadFromDOAJ(doi: string): Promise<DownloadResult | null> {
+  try {
+    // DOI 내 슬래시는 백슬래시로 이스케이프 (DOAJ 쿼리 문법)
+    const escaped = doi.replace(/\//g, '\\/');
+    const res = await axios.get(
+      `https://doaj.org/api/v4/search/articles/doi:${encodeURIComponent(escaped)}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const results: any[] = res.data?.results ?? [];
+    if (!results.length) { console.log(`[doaj] Not found: ${doi}`); return null; }
+
+    const bibjson = results[0].bibjson ?? {};
+    const links: Array<{ type?: string; url?: string; content_type?: string }> = bibjson.link ?? [];
+    // fulltext 링크 우선
+    const candidates = [
+      ...links.filter(l => l.type === 'fulltext'),
+      ...links.filter(l => l.type !== 'fulltext'),
+    ].map(l => l.url).filter(Boolean) as string[];
+    if (!candidates.length) { console.log(`[doaj] No fulltext link for ${doi}`); return null; }
+
+    const authors = (bibjson.author ?? []).slice(0, 5)
+      .map((a: { name?: string }) => a.name).filter(Boolean).join(', ');
+    const year = bibjson.year ? parseInt(bibjson.year) : undefined;
+    const journal = bibjson.journal?.title;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'doaj_');
+      if (result) {
+        console.log(`[doaj] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: bibjson.title, authors: authors || undefined, year, journal };
+      }
+    }
+    console.log(`[doaj] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[doaj] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── Internet Archive Scholar (fatcat) ───────────────────────────────────────
+// IA가 보존한 2,500만+ 논문 전문 — 폐간/오래된 논문에 특히 강함. key 불필요.
+async function downloadFromFatcat(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://api.fatcat.wiki/v0/release/lookup`,
+      {
+        timeout: 12000,
+        params: { doi: doi.toLowerCase(), expand: 'files', hide: 'abstracts,refs' },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const rel = res.data;
+    if (!rel?.ident) { console.log(`[fatcat] Not found: ${doi}`); return null; }
+
+    const files: any[] = rel.files ?? [];
+    const candidates: string[] = [];
+    // PDF mimetype 파일 우선, archive.org 호스트 URL 선호
+    const pdfFiles = files.filter(f => (f.mimetype ?? '').includes('pdf'));
+    for (const f of [...pdfFiles, ...files]) {
+      const urls: Array<{ url?: string }> = f.urls ?? [];
+      const sorted = urls
+        .map(u => u.url)
+        .filter(Boolean)
+        .sort((a, b) => (b!.includes('archive.org') ? 1 : 0) - (a!.includes('archive.org') ? 1 : 0)) as string[];
+      for (const u of sorted) if (!candidates.includes(u)) candidates.push(u);
+    }
+    if (!candidates.length) { console.log(`[fatcat] No preserved file for ${doi}`); return null; }
+
+    const authors = (rel.contribs ?? []).slice(0, 5)
+      .map((c: { raw_name?: string }) => c.raw_name).filter(Boolean).join(', ');
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'fatcat_');
+      if (result) {
+        console.log(`[fatcat] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: rel.title, authors: authors || undefined, year: rel.release_year };
+      }
+    }
+    console.log(`[fatcat] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[fatcat] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── HAL (Archive ouverte HAL, 프랑스 국립 OA 저장소) ─────────────────────────
+// 유럽·프랑스 연구 전문에 강함. fileMain_s = HAL 호스팅 PDF, files_s = 직접 PDF 목록.
+async function downloadFromHAL(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://api.archives-ouvertes.fr/search/',
+      {
+        timeout: 10000,
+        params: {
+          q: '*:*',
+          fq: `doiId_s:"${doi}"`,
+          fl: 'title_s,authFullName_s,producedDateY_i,files_s,fileMain_s',
+          wt: 'json',
+          rows: 1,
+        },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const docs: any[] = res.data?.response?.docs ?? [];
+    if (!docs.length) { console.log(`[hal] Not found: ${doi}`); return null; }
+
+    const doc = docs[0];
+    const candidates: string[] = [];
+    for (const u of (doc.files_s ?? []) as string[]) if (u && !candidates.includes(u)) candidates.push(u);
+    if (doc.fileMain_s && !candidates.includes(doc.fileMain_s)) candidates.push(doc.fileMain_s);
+    if (!candidates.length) { console.log(`[hal] No fulltext for ${doi}`); return null; }
+
+    const title = Array.isArray(doc.title_s) ? doc.title_s[0] : doc.title_s;
+    const authors = (doc.authFullName_s ?? []).slice(0, 5).join(', ');
+    const year = doc.producedDateY_i;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'hal_');
+      if (result) {
+        console.log(`[hal] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year };
+      }
+    }
+    console.log(`[hal] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[hal] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
 interface UnpaywallLocation {
   url?: string;
@@ -1064,9 +1271,13 @@ export async function downloadPaper(
     ['Europe PMC',       () => downloadFromEuropePMC(doi)],
     ['PMC OA',           () => downloadFromPMC(doi)],
     ['CORE',             () => downloadFromCORE(doi)],
+    ['DOAJ',             () => downloadFromDOAJ(doi)],
     ['arXiv',            () => downloadFromArxiv(doi)],
     ['Zenodo',           () => downloadFromZenodo(doi)],
     ['bioRxiv/medRxiv',  () => downloadFromBioRxiv(doi)],
+    ['IA Scholar',       () => downloadFromFatcat(doi)],
+    ['HAL',              () => downloadFromHAL(doi)],
+    ['Crossref TDM',     () => downloadFromCrossref(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
@@ -1128,3 +1339,5 @@ export async function downloadPaper(
   progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
   return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
 }
+// OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
+// PMC OA, CORE, DOAJ, arXiv, Zenodo, bioRxiv/medRxiv, IA Scholar, HAL, Crossref TDM
