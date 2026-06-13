@@ -21,7 +21,6 @@ const IconAlert = svg(<><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1
 const IconArrow = svg(<><path d="M5 12h14M12 5l7 7-7 7" /></>);
 const IconExternal = svg(<><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>);
 const IconCheck = svg(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>);
-const IconDownload = svg(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5M12 15V3" /></>);
 
 const EXAMPLES = [
   '10.1038/nature12373',
@@ -51,7 +50,6 @@ export default function Home() {
   const { isLoggedIn } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
-  const qrRef = useRef<HTMLDivElement>(null);
 
   const cancelDownload = () => {
     window.location.reload();
@@ -178,24 +176,6 @@ export default function Home() {
       return;
     }
     doDownload();
-  };
-
-  const downloadQR = () => {
-    const el = qrRef.current?.querySelector('svg');
-    if (!el) return;
-    const clone = el.cloneNode(true) as SVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.removeAttribute('class');
-    const data = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'scholarlink-qr.svg';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -393,25 +373,15 @@ export default function Home() {
 
         {/* ── QR 코드 ── */}
         <div className="flex flex-col items-center gap-2 py-2">
-          <div ref={qrRef}>
-            <QRCodeSVG
-              value="https://wheeljah.github.io/SC_link/"
-              size={96}
-              bgColor="#ffffff"
-              fgColor="#0f172a"
-              level="M"
-              className="rounded-lg border border-slate-100 p-1.5 shadow-sm"
-            />
-          </div>
+          <QRCodeSVG
+            value="https://wheeljah.github.io/SC_link/"
+            size={96}
+            bgColor="#ffffff"
+            fgColor="#0f172a"
+            level="M"
+            className="rounded-lg border border-slate-100 p-1.5 shadow-sm"
+          />
           <p className="text-xs text-slate-400">모바일에서 바로 접속</p>
-          <button
-            type="button"
-            onClick={downloadQR}
-            className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:text-brand-800 border border-brand-200 hover:bg-brand-50 rounded-lg px-2.5 py-1 transition-colors"
-          >
-            <IconDownload className="w-3.5 h-3.5" />
-            SVG 다운로드
-          </button>
         </div>
 
         <ServerStatus compact />

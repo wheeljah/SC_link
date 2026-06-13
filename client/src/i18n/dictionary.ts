@@ -13,7 +13,6 @@ export const EN: Record<string, string> = {
   '회원가입': 'Sign up',
 
   // ── Home / landing ──
-  'SVG 다운로드': 'Download SVG',
   '저널 URL': 'Journal URL',
   '17개 오픈액세스 소스': '17 open-access sources',
   '23개 오픈액세스 소스': '23 open-access sources',
