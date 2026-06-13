@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
 import AuthModal from '../components/AuthModal';
@@ -188,7 +189,7 @@ export default function Home() {
         <header className="text-center pt-4">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.15]">
             <span className="bg-gradient-to-r from-navy via-brand-700 to-brand-500 bg-clip-text text-transparent">
-              학술논문 · 도서 통합 검색
+              오픈액세스 논문 · 도서 통합 검색
             </span>
           </h1>
           <p className="mt-4 text-slate-500 text-base sm:text-lg">
@@ -371,6 +372,19 @@ export default function Home() {
             </div>
           )}
         </form>
+
+        {/* ── QR 코드 ── */}
+        <div className="flex flex-col items-center gap-2 py-2">
+          <QRCodeSVG
+            value="https://wheeljah.github.io/SC_link/"
+            size={96}
+            bgColor="#ffffff"
+            fgColor="#0f172a"
+            level="M"
+            className="rounded-lg border border-slate-100 p-1.5 shadow-sm"
+          />
+          <p className="text-xs text-slate-400">모바일에서 바로 접속</p>
+        </div>
 
         <ServerStatus compact />
 

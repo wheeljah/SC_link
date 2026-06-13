@@ -17,6 +17,8 @@ export const EN: Record<string, string> = {
   '17개 오픈액세스 소스': '17 open-access sources',
   '23개 오픈액세스 소스': '23 open-access sources',
   'OA 서버 지속 업데이트 중': 'OA sources continuously expanding',
+  '모바일에서 바로 접속': 'Scan to open on mobile',
+  '오픈액세스 논문 · 도서 통합 검색': 'Open-access papers & books, all in one search',
   '학술논문 · 도서 통합 검색': 'Unified search for papers & books',
   '오픈액세스 논문/자료, 한 번에 검색': 'Open-access papers & resources, all in one search',
   'DOI · PubMed ID · arXiv ID · 저널 URL 입력으로 OA 논문과 학술 도서를 바로 검색합니다.': 'Enter a DOI, PubMed ID, arXiv ID, or journal URL to instantly search OA papers and academic books.',

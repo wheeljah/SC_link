@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react';
 import bidvibeLogo from '../../assets/bidvibe-logo.svg';
+import { getLang } from '../../i18n/translate';
 
-const CTA_U = 'https://ai-traffic.kr';
-const MSG1  = '시약/장비 일단 띡! 견적요청만 올리면 됨';
+const CTA_U   = 'https://ai-traffic.kr';
+const MSG_KO  = '시약/장비 일단 띡! 견적요청만 올리면 됨';
+const MSG_EN  = 'Bring your suppliers, researchers — stop looking at the spreadsheet.';
+const LABEL_KO = '광고';
+const LABEL_EN = 'Ad';
 
 export default function BottomAdBanner() {
   const ref = useRef<HTMLAnchorElement>(null);
+  const isEn = getLang() === 'en';
 
   useEffect(() => {
     const el = ref.current;
@@ -40,14 +45,14 @@ export default function BottomAdBanner() {
       <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
         <span className="text-[10px] font-bold rounded px-1.5 py-0.5 leading-tight"
           style={{ border: '1px solid rgba(26,172,218,0.5)', color: '#0E7490' }}>
-          광고
+          {isEn ? LABEL_EN : LABEL_KO}
         </span>
         <p className="text-base sm:text-lg font-bold leading-snug break-keep" style={{ color: '#132B43' }}>
-          {MSG1}
+          {isEn ? MSG_EN : MSG_KO}
         </p>
       </div>
 
-      {/* 우측: BidVibe 로고 (원본 그대로, 투명 배경) */}
+      {/* 우측: BidVibe 로고 */}
       <img src={bidvibeLogo} alt="BidVibe" className="h-9 sm:h-11 w-auto shrink-0 block" />
     </a>
   );
