@@ -188,9 +188,7 @@ export default function Home() {
         {/* ── Hero ── */}
         <header className="text-center pt-4">
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.15]">
-            <span className="bg-gradient-to-r from-navy via-brand-700 to-brand-500 bg-clip-text text-transparent">
-              오픈액세스 논문 · 도서 통합 검색
-            </span>
+            <span className="bg-gradient-to-r from-navy via-brand-700 to-brand-500 bg-clip-text text-transparent whitespace-pre-line">오픈액세스 논문 · 도서 통합 검색</span>
           </h1>
           <p className="mt-4 text-slate-500 text-base sm:text-lg">
             DOI · PubMed ID · arXiv ID · 저널 URL 입력으로 OA 논문과 학술 도서를 바로 검색합니다.
