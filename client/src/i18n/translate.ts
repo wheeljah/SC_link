@@ -1,8 +1,9 @@
-// Runtime DOM translation engine (KO ↔ EN).
+// Runtime DOM translation engine (KO <-> EN).
 // 전체 화면의 한국어 UI 문구를 사전(dictionary) 기반으로 실시간 치환한다.
 import { EN, RULES } from './dictionary';
 
-const LS_KEY = 'sl_lang';
+const LS_KEY      = 'sl_lang';
+const LS_GEO_DONE = 'sl_geo_done'; // 최초 1회 IP 감지 완료 여부
 export type Lang = 'ko' | 'en';
 
 export function getLang(): Lang {
@@ -10,9 +11,30 @@ export function getLang(): Lang {
 }
 
 export function setLang(l: Lang): void {
-  try { localStorage.setItem(LS_KEY, l); } catch { /* ignore */ }
-  // KO 복원/EN 적용을 가장 안전하게 처리하기 위해 새로고침
+  try {
+    localStorage.setItem(LS_KEY, l);
+    localStorage.setItem(LS_GEO_DONE, '1'); // 수동 변경 시 재감지 방지
+  } catch { /* ignore */ }
   window.location.reload();
+}
+
+/** 최초 방문 시 IP 국가 감지 → 비한국이면 EN 기본값 설정 */
+async function detectAndSetLang(): Promise<void> {
+  try {
+    const already = localStorage.getItem(LS_GEO_DONE);
+    if (already) return; // 이미 감지했거나 수동 변경됨
+    localStorage.setItem(LS_GEO_DONE, '1'); // 중복 요청 방지 (선점)
+
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch('https://ipapi.co/country/', { signal: ctrl.signal });
+    clearTimeout(tid);
+    const country = (await res.text()).trim(); // 'KR', 'US', ...
+    if (country && country !== 'KR') {
+      localStorage.setItem(LS_KEY, 'en');
+      window.location.reload();
+    }
+  } catch (_e) { /* 감지 실패 시 기본값(ko) 유지 */ }
 }
 
 function translate(raw: string): string | null {
@@ -56,13 +78,13 @@ function walk(root: Node): void {
   const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
   let n: Node | null;
-  while ((n = tw.nextNode())) texts.push(n as Text);
+  while ((n = tw.nextNode()) !== null) texts.push(n as Text);
   texts.forEach(translateTextNode);
 
   if (root instanceof Element) translateElement(root);
   const ew = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let e: Node | null;
-  while ((e = ew.nextNode())) translateElement(e as Element);
+  while ((e = ew.nextNode()) !== null) translateElement(e as Element);
 }
 
 let scheduled = false;
@@ -76,6 +98,9 @@ function schedule(): void {
 }
 
 export function initI18n(): void {
+  // 최초 방문 시 IP 감지 (비동기, 결과에 따라 reload)
+  detectAndSetLang();
+
   if (getLang() !== 'en') return;
   const start = () => {
     walk(document.body);

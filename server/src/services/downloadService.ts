@@ -1,9 +1,5 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const cloudscraper = require('cloudscraper') as {
-  get: (opts: string | { url: string }) => Promise<string>;
-};
 import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
@@ -522,243 +518,6 @@ async function downloadFromRISS(doi: string): Promise<DownloadResult | null> {
   }
 }
 
-// ─── Sci-Hub.run (FastAPI backend) ───────────────────────────────────────────
-async function downloadFromSciHubRun(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
-  console.log(`[scihub.run] Called for DOI=${doi}`);
-  const API_BASE = 'https://fast.wbleb.com';
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Origin': 'https://sci-hub.run',
-    'Referer': 'https://sci-hub.run/',
-    'Content-Type': 'application/json',
-    'sec-fetch-site': 'cross-site',
-    'sec-fetch-mode': 'cors',
-  };
-
-  try {
-    // Use CF proxy for API call if available (fast.wbleb.com blocks Render IPs)
-    const directApiUrl = `${API_BASE}/api/v1/paper/${encodeURIComponent(doi)}`;
-    const apiUrl = cfProxied(directApiUrl) ?? directApiUrl;
-    const apiRes = await axios.get(apiUrl, {
-      timeout: 8000,
-      headers,
-    });
-    const data = apiRes.data;
-    if (!data.success) return null;
-
-    const pdfPath: string = data.url;
-    const pdfUrl = pdfPath.startsWith('http') ? pdfPath : `${API_BASE}${pdfPath}`;
-    const result = await downloadFileFromUrl(pdfUrl, doi, 'shr_');
-    if (result) {
-      console.log(`[scihub.run] Downloaded: ${doi} (cached=${data.cached})`);
-      return result;
-    }
-    return null;
-  } catch (e) {
-    if (axios.isAxiosError(e)) {
-      if (e.response?.status === 404) { console.log(`[scihub.run] Not found: ${doi}`); return null; }
-      console.log(`[scihub.run] ${e.response?.status} ${e.message}`);
-    }
-    return null;
-  }
-}
-
-// ─── Sci-Hub (cloudscraper → cheerio) ───────────────────────────────────────
-
-class ScrapeBlockedError extends Error {
-  constructor(message: string) { super(message); this.name = 'ScrapeBlockedError'; }
-}
-class SciHubNotAvailableError extends Error {
-  constructor(message: string) { super(message); this.name = 'SciHubNotAvailableError'; }
-}
-
-async function scrapeSciHubPage(doi: string, server: ServerInfo): Promise<string | null> {
-  try {
-    const pageUrl = `${server.url}/${doi}`;
-    const pageHtml = await cloudscraper.get(pageUrl) as string;
-
-    if (
-      pageHtml.includes('DDoS-Guard') ||
-      pageHtml.includes('Cloudflare') ||
-      pageHtml.includes('Just a moment') ||
-      pageHtml.length < 100
-    ) {
-      throw new ScrapeBlockedError(`Protection page from ${server.name}: ${pageUrl}`);
-    }
-
-    const notAvailablePatterns = [
-      'Log in to access this article',
-      'The article reader is available to registered users',
-      'Login to access',
-      'not found in Sci-Hub',
-      'Article not found',
-    ];
-    for (const pattern of notAvailablePatterns) {
-      if (pageHtml.includes(pattern)) {
-        throw new SciHubNotAvailableError(`Paper not available on ${server.name}: ${pattern}`);
-      }
-    }
-
-    const $ = cheerio.load(pageHtml);
-
-    const embedSrc = $('embed[type="application/pdf"]').attr('src') ||
-                     $('iframe').filter('[src*="pdf"], [src*="viewer"]').attr('src');
-    if (embedSrc) {
-      const fixedEmbed = embedSrc.startsWith('//') ? 'https:' + embedSrc : embedSrc;
-      return fixedEmbed.startsWith('http') ? fixedEmbed : `${server.url}${fixedEmbed}`;
-    }
-
-    const pdfHref = $('a[href$=".pdf"]').first().attr('href') ||
-                    $('a[href*=".pdf?"]').first().attr('href') ||
-                    $('button[onclick*=".pdf"]').first().attr('onclick')?.match(/['"]([^'"]*\.pdf[^'"]*)['"]/)?.[1];
-    if (pdfHref) return pdfHref.startsWith('http') ? pdfHref : `${server.url}${pdfHref}`;
-
-    const dataPdf = $('[data-pdf]').first().attr('data-pdf') ||
-                    $('[data-src*="pdf"]').first().attr('data-src') ||
-                    $('[data-url*="pdf"]').first().attr('data-url');
-    if (dataPdf) return dataPdf.startsWith('http') ? dataPdf : `${server.url}${dataPdf}`;
-
-    return null;
-  } catch (e) {
-    if (e instanceof ScrapeBlockedError) throw e;
-    if (e instanceof SciHubNotAvailableError) throw e;
-    return null;
-  }
-}
-
-async function scrapeSciHubWithBrowser(doi: string, server: ServerInfo): Promise<string | null> {
-  console.log(`[puppeteer] Scraping ${doi} via ${server.name}...`);
-  let browser;
-  try {
-    browser = await getBrowser();
-  } catch(e: unknown) {
-    console.log(`[puppeteer] Browser launch failed: ${(e as Error).message}`);
-    return null;
-  }
-  const page = await browser.newPage();
-
-  try {
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-
-    const pageUrl = `${server.url}/${doi}`;
-    try {
-      await page.goto(pageUrl, { waitUntil: 'load', timeout: 20000 });
-    } catch(e: unknown) {
-      console.log(`[puppeteer] goto failed: ${(e as Error).message.substring(0, 200)}`);
-      return null;
-    }
-
-    await page.waitForSelector('embed[type="application/pdf"], iframe[src*="pdf"], a[href$=".pdf"], [class*="download"]', {
-      timeout: 15000,
-    }).catch(() => {});
-
-    const candidates: string[] = [];
-
-    const embeds = await page.$$eval('embed[src], iframe[src]', (els: (Element & { src?: string })[]) =>
-      els.map(e => e.src || '')
-    );
-    candidates.push(...embeds);
-
-    const links = await page.$$eval('a[href]', (els: (HTMLAnchorElement & { href?: string })[]) =>
-      els.filter(e => (e.href || '').toLowerCase().includes('.pdf')).map(e => e.href || '')
-    );
-    candidates.push(...links);
-
-    const btnCandidates = await page.$$eval('button, a', (els: Element[]) =>
-      els.flatMap(e => {
-        const el = e as HTMLElement;
-        const onclick = el.getAttribute('onclick') || '';
-        const match = onclick.match(/['"]([^'"]*\.pdf[^'"]*)['"]/) || [];
-        return [...match, el.getAttribute('data-src') || '', el.getAttribute('data-url') || '', el.getAttribute('data-pdf') || ''].filter(Boolean) as string[];
-      })
-    );
-    candidates.push(...btnCandidates);
-
-    await page.close();
-
-    for (const candidate of candidates) {
-      if (candidate && candidate.length > 10 && !candidate.includes('void') && !candidate.includes('undefined')) {
-        const resolved = candidate.startsWith('//') ? `https:${candidate}` :
-                         candidate.startsWith('/') ? `${server.url}${candidate}` :
-                         candidate;
-        try {
-          const head = await axios.head(resolved, { timeout: 8000, maxRedirects: 3 });
-          const ct = String(head.headers['content-type'] || '');
-          if (ct.includes('pdf') || head.headers['content-length']) return resolved;
-        } catch { /* try next */ }
-      }
-    }
-
-    return null;
-  } catch {
-    try { await page.close(); } catch { /* ignore */ }
-    return null;
-  }
-}
-
-async function downloadFromSciHub(doi: string, server: ServerInfo): Promise<DownloadResult | null> {
-  if (server.url.includes('sci-hub.run')) return await downloadFromSciHubRun(doi, server);
-
-  let cloudscraperPdfUrl: string | null = null;
-
-  try {
-    cloudscraperPdfUrl = await scrapeSciHubPage(doi, server);
-  } catch (e) {
-    if (e instanceof ScrapeBlockedError) {
-      console.log(`[scihub] cloudscraper blocked on ${server.name}, falling back to Puppeteer...`);
-      cloudscraperPdfUrl = null;
-    } else if (e instanceof SciHubNotAvailableError) {
-      console.log(`[scihub] ${server.name}: ${e.message}`);
-      return null;
-    } else {
-      return null;
-    }
-  }
-
-  if (cloudscraperPdfUrl) {
-    const result = await downloadFileFromUrl(cloudscraperPdfUrl, doi, 'scidir_');
-    if (result) return result;
-
-    if (PUPPETEER_AVAILABLE) {
-      try {
-        const browser = await getBrowser();
-        const page = await browser.newPage();
-        try {
-          await page.setUserAgent(
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          );
-          const resolvedUrl = cloudscraperPdfUrl.startsWith('http')
-            ? cloudscraperPdfUrl
-            : `${server.url}${cloudscraperPdfUrl}`;
-          await page.goto(resolvedUrl, { timeout: 30000 });
-          await page.waitForSelector('body', { timeout: 5000 }).catch(() => {});
-          const ct = await page.evaluate(() => document.contentType || '');
-          if (ct.includes('pdf') || resolvedUrl.endsWith('.pdf')) {
-            const filename = `scidir_${Date.now()}_${doi.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-            const filePath = path.join(UPLOAD_DIR, filename);
-            const pdfBuffer = await page.pdf({ printBackground: true });
-            fs.writeFileSync(filePath, pdfBuffer);
-            const stat = fs.statSync(filePath);
-            if (stat.size > 5000) return { filePath: `/uploads/${filename}`, fileSize: stat.size };
-            fs.unlinkSync(filePath);
-          }
-        } catch { /* fall through */ }
-        finally { await page.close().catch(() => {}); }
-      } catch { /* Chrome 없음 — 건너뜀 */ }
-    }
-  }
-
-  const browserPdfUrl = await scrapeSciHubWithBrowser(doi, server);
-  if (browserPdfUrl) {
-    const result = await downloadFileFromUrl(browserPdfUrl, doi, 'scidir_');
-    if (result) return result;
-  }
-
-  return null;
-}
-
 // ─── OA: arXiv ──────────────────────────────────────────────────────────────
 async function downloadFromArxiv(doi: string): Promise<DownloadResult | null> {
   try {
@@ -830,6 +589,349 @@ async function downloadFromBioRxiv(doi: string): Promise<DownloadResult | null> 
     }
   }
   return null;
+}
+
+// ─── Crossref (TDM full-text links) ──────────────────────────────────────────
+// 출판사가 메타데이터에 직접 등록한 text-mining 전문(PDF) 링크 — key 불필요.
+// 일부 진성 OA 출판사(Frontiers, MDPI, Hindawi 등)는 직접 PDF URL 제공.
+async function downloadFromCrossref(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const msg = res.data?.message;
+    if (!msg) { console.log(`[crossref] Not found: ${doi}`); return null; }
+
+    const links: Array<{ URL?: string; 'content-type'?: string; 'intended-application'?: string }> =
+      msg.link ?? [];
+    // PDF content-type 우선, 그다음 text-mining 용도 링크
+    const pdfLinks = links.filter(l => l['content-type'] === 'application/pdf');
+    const tdmLinks = links.filter(
+      l => l['intended-application'] === 'text-mining' && !pdfLinks.includes(l)
+    );
+    const candidates = [...pdfLinks, ...tdmLinks].map(l => l.URL).filter(Boolean) as string[];
+    if (!candidates.length) { console.log(`[crossref] No full-text link for ${doi}`); return null; }
+
+    const title = Array.isArray(msg.title) ? msg.title[0] : msg.title;
+    const authors = (msg.author ?? []).slice(0, 5)
+      .map((a: { given?: string; family?: string }) => [a.given, a.family].filter(Boolean).join(' '))
+      .filter(Boolean).join(', ');
+    const year = msg.published?.['date-parts']?.[0]?.[0]
+      ?? msg.issued?.['date-parts']?.[0]?.[0];
+    const journal = Array.isArray(msg['container-title']) ? msg['container-title'][0] : undefined;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'crossref_');
+      if (result) {
+        console.log(`[crossref] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year, journal };
+      }
+    }
+    console.log(`[crossref] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[crossref] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── DOAJ (Directory of Open Access Journals) ────────────────────────────────
+// 순수 OA 저널 색인 — rate limit 없음, key 불필요. bibjson.link[].type = 'fulltext'.
+async function downloadFromDOAJ(doi: string): Promise<DownloadResult | null> {
+  try {
+    // DOI 내 슬래시는 백슬래시로 이스케이프 (DOAJ 쿼리 문법)
+    const escaped = doi.replace(/\//g, '\\/');
+    const res = await axios.get(
+      `https://doaj.org/api/v4/search/articles/doi:${encodeURIComponent(escaped)}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const results: any[] = res.data?.results ?? [];
+    if (!results.length) { console.log(`[doaj] Not found: ${doi}`); return null; }
+
+    const bibjson = results[0].bibjson ?? {};
+    const links: Array<{ type?: string; url?: string; content_type?: string }> = bibjson.link ?? [];
+    // fulltext 링크 우선
+    const candidates = [
+      ...links.filter(l => l.type === 'fulltext'),
+      ...links.filter(l => l.type !== 'fulltext'),
+    ].map(l => l.url).filter(Boolean) as string[];
+    if (!candidates.length) { console.log(`[doaj] No fulltext link for ${doi}`); return null; }
+
+    const authors = (bibjson.author ?? []).slice(0, 5)
+      .map((a: { name?: string }) => a.name).filter(Boolean).join(', ');
+    const year = bibjson.year ? parseInt(bibjson.year) : undefined;
+    const journal = bibjson.journal?.title;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'doaj_');
+      if (result) {
+        console.log(`[doaj] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: bibjson.title, authors: authors || undefined, year, journal };
+      }
+    }
+    console.log(`[doaj] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[doaj] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── Internet Archive Scholar (fatcat) ───────────────────────────────────────
+// IA가 보존한 2,500만+ 논문 전문 — 폐간/오래된 논문에 특히 강함. key 불필요.
+async function downloadFromFatcat(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://api.fatcat.wiki/v0/release/lookup`,
+      {
+        timeout: 12000,
+        params: { doi: doi.toLowerCase(), expand: 'files', hide: 'abstracts,refs' },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const rel = res.data;
+    if (!rel?.ident) { console.log(`[fatcat] Not found: ${doi}`); return null; }
+
+    const files: any[] = rel.files ?? [];
+    const candidates: string[] = [];
+    // PDF mimetype 파일 우선, archive.org 호스트 URL 선호
+    const pdfFiles = files.filter(f => (f.mimetype ?? '').includes('pdf'));
+    for (const f of [...pdfFiles, ...files]) {
+      const urls: Array<{ url?: string }> = f.urls ?? [];
+      const sorted = urls
+        .map(u => u.url)
+        .filter(Boolean)
+        .sort((a, b) => (b!.includes('archive.org') ? 1 : 0) - (a!.includes('archive.org') ? 1 : 0)) as string[];
+      for (const u of sorted) if (!candidates.includes(u)) candidates.push(u);
+    }
+    if (!candidates.length) { console.log(`[fatcat] No preserved file for ${doi}`); return null; }
+
+    const authors = (rel.contribs ?? []).slice(0, 5)
+      .map((c: { raw_name?: string }) => c.raw_name).filter(Boolean).join(', ');
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'fatcat_');
+      if (result) {
+        console.log(`[fatcat] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: rel.title, authors: authors || undefined, year: rel.release_year };
+      }
+    }
+    console.log(`[fatcat] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[fatcat] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── HAL (Archive ouverte HAL, 프랑스 국립 OA 저장소) ─────────────────────────
+// 유럽·프랑스 연구 전문에 강함. fileMain_s = HAL 호스팅 PDF, files_s = 직접 PDF 목록.
+async function downloadFromHAL(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://api.archives-ouvertes.fr/search/',
+      {
+        timeout: 10000,
+        params: {
+          q: '*:*',
+          fq: `doiId_s:"${doi}"`,
+          fl: 'title_s,authFullName_s,producedDateY_i,files_s,fileMain_s',
+          wt: 'json',
+          rows: 1,
+        },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    const docs: any[] = res.data?.response?.docs ?? [];
+    if (!docs.length) { console.log(`[hal] Not found: ${doi}`); return null; }
+
+    const doc = docs[0];
+    const candidates: string[] = [];
+    for (const u of (doc.files_s ?? []) as string[]) if (u && !candidates.includes(u)) candidates.push(u);
+    if (doc.fileMain_s && !candidates.includes(doc.fileMain_s)) candidates.push(doc.fileMain_s);
+    if (!candidates.length) { console.log(`[hal] No fulltext for ${doi}`); return null; }
+
+    const title = Array.isArray(doc.title_s) ? doc.title_s[0] : doc.title_s;
+    const authors = (doc.authFullName_s ?? []).slice(0, 5).join(', ');
+    const year = doc.producedDateY_i;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'hal_');
+      if (result) {
+        console.log(`[hal] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year };
+      }
+    }
+    console.log(`[hal] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[hal] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── OSF Preprints (api.osf.io) ──────────────────────────────────────────────
+// PsyArXiv·SocArXiv·EngrXiv·MetaArXiv 등 다수 프리프린트 커뮤니티 통합. key 불필요.
+async function downloadFromOSF(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://api.osf.io/v2/preprints/',
+      {
+        timeout: 12000,
+        params: { 'filter[doi]': doi, 'page[size]': 1 },
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/vnd.api+json',
+        },
+      }
+    );
+    const data: any[] = res.data?.data ?? [];
+    if (!data.length) { console.log(`[osf] Not found: ${doi}`); return null; }
+
+    const pp = data[0];
+    const attrs = pp.attributes ?? {};
+    // primary_file 리소스 → links.download 가 실제 PDF
+    const fileHref: string | undefined = pp.relationships?.primary_file?.links?.related?.href;
+    const candidates: string[] = [];
+    if (fileHref) {
+      try {
+        const fileRes = await axios.get(fileHref, {
+          timeout: 10000,
+          headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/vnd.api+json' },
+        });
+        const dl: string | undefined = fileRes.data?.data?.links?.download;
+        if (dl) candidates.push(dl);
+      } catch { /* primary_file 조회 실패 시 무시 */ }
+    }
+    if (attrs.doi && pp.id) candidates.push(`https://osf.io/download/${pp.id}/`);
+    if (!candidates.length) { console.log(`[osf] No downloadable file for ${doi}`); return null; }
+
+    const year = attrs.date_published ? parseInt(String(attrs.date_published).slice(0, 4)) : undefined;
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'osf_');
+      if (result) {
+        console.log(`[osf] ✅ PDF 확보: ${doi}`);
+        return { ...result, title: attrs.title, year };
+      }
+    }
+    console.log(`[osf] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[osf] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── DataCite (api.datacite.org) ─────────────────────────────────────────────
+// 데이터셋·학위논문·기관 리포지터리 DOI 다수. contentUrl[] = 직접 파일, url = 랜딩. key 불필요.
+async function downloadFromDataCite(doi: string): Promise<DownloadResult | null> {
+  try {
+    // DataCite는 path에 raw DOI(슬래시 포함)를 그대로 사용
+    const res = await axios.get(
+      `https://api.datacite.org/dois/${doi}`,
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+          'Accept': 'application/vnd.api+json',
+        },
+      }
+    );
+    const attr = res.data?.data?.attributes;
+    if (!attr) { console.log(`[datacite] Not found: ${doi}`); return null; }
+
+    const candidates: string[] = [];
+    for (const u of (attr.contentUrl ?? []) as string[]) if (u && !candidates.includes(u)) candidates.push(u);
+    if (attr.url && !candidates.includes(attr.url)) candidates.push(attr.url);
+    if (!candidates.length) { console.log(`[datacite] No content URL for ${doi}`); return null; }
+
+    const title = Array.isArray(attr.titles) ? attr.titles[0]?.title : undefined;
+    const authors = (attr.creators ?? []).slice(0, 5)
+      .map((c: { name?: string }) => c.name).filter(Boolean).join(', ');
+    const year = attr.publicationYear;
+
+    for (const url of candidates) {
+      const result = await downloadFileFromUrl(url, doi, 'datacite_');
+      if (result) {
+        console.log(`[datacite] ✅ PDF 확보: ${doi}`);
+        return { ...result, title, authors: authors || undefined, year };
+      }
+    }
+    console.log(`[datacite] No downloadable PDF for ${doi} (${candidates.length} URLs tried)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[datacite] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── Figshare (api.figshare.com) ─────────────────────────────────────────────
+// 그림·포스터·학위논문·프리프린트 등 공개 자료 — 공개 메타/파일은 key 불필요.
+async function downloadFromFigshare(doi: string): Promise<DownloadResult | null> {
+  const headers = {
+    'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)',
+    'Accept': 'application/json',
+  };
+  try {
+    const search = await axios.post(
+      'https://api.figshare.com/v2/articles/search',
+      { doi, page_size: 1 },
+      { timeout: 10000, headers },
+    );
+    const hits: any[] = Array.isArray(search.data) ? search.data : [];
+    if (!hits.length) { console.log(`[figshare] Not found: ${doi}`); return null; }
+
+    const detail = await axios.get(`https://api.figshare.com/v2/articles/${hits[0].id}`, { timeout: 10000, headers });
+    const files: any[] = detail.data?.files ?? [];
+    if (!files.length) { console.log(`[figshare] No files for ${doi}`); return null; }
+
+    const title: string | undefined = detail.data?.title;
+    const year = detail.data?.published_date ? parseInt(String(detail.data.published_date).slice(0, 4)) : undefined;
+    const ordered = [...files].sort(
+      (a, b) => (String(b.name).toLowerCase().endsWith('.pdf') ? 1 : 0) - (String(a.name).toLowerCase().endsWith('.pdf') ? 1 : 0)
+    );
+    for (const f of ordered) {
+      if (!f.download_url) continue;
+      const r = await downloadFileFromUrl(f.download_url, doi, 'figshare_');
+      if (r) { console.log(`[figshare] ✅ PDF 확보: ${doi}`); return { ...r, title, year }; }
+    }
+    console.log(`[figshare] No downloadable PDF for ${doi} (${files.length} files)`);
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[figshare] ${e.response?.status} ${e.message}`);
+    return null;
+  }
 }
 
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
@@ -1023,38 +1125,6 @@ export async function downloadPaper(
   progress(`🔎 DOI 정보 확인 중...`);
 
   // ─── Phase 1: Open Access APIs (무료·합법, API key 불필요) ────────────────
-  // --- 연도 사전 확인 (2022년 초과 논문은 Sci-Hub 건너뜀) ---
-  let paperYear: number | undefined;
-  // 1차: Semantic Scholar
-  try {
-    const meta = await fetchPaperMetadataFromS2(doi);
-    paperYear = meta?.year;
-  } catch { /* ignore */ }
-  // 2차: CrossRef (최신 논문에 S2가 없을 때 대비)
-  if (!paperYear) {
-    try {
-      const cr = await axios.get(
-        `https://api.crossref.org/works/${encodeURIComponent(doi)}?select=published`,
-        { timeout: 6000 }
-      );
-      paperYear = cr.data?.message?.published?.['date-parts']?.[0]?.[0];
-    } catch { /* ignore */ }
-  }
-  // 3차: OpenAlex
-  if (!paperYear) {
-    try {
-      const oa = await axios.get(
-        `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=publication_year`,
-        { timeout: 6000 }
-      );
-      paperYear = oa.data?.publication_year;
-    } catch { /* ignore */ }
-  }
-  const skipSciHub = paperYear !== undefined && paperYear > 2022;
-  // 책/챕터 DOI 판별 — Phase 2 이전에 선언 (Springer: 10.XXXX/978-, Elsevier: 10.XXXX/B978-)
-  const isBookChapter = /^10\.\d{4}\/B?978-/.test(doi) || doi.includes('_');
-  if (skipSciHub) progress(`[skip] ${paperYear}년 논문 — Sci-Hub 건너뜀 (2022년 이후 미지원)`);
-
   const oaSources: Array<[string, () => Promise<DownloadResult | null>]> = [
     ['OpenAlex',         () => downloadFromOpenAlex(doi)],
     ['Unpaywall',        () => downloadFromUnpaywall(doi)],
@@ -1064,9 +1134,16 @@ export async function downloadPaper(
     ['Europe PMC',       () => downloadFromEuropePMC(doi)],
     ['PMC OA',           () => downloadFromPMC(doi)],
     ['CORE',             () => downloadFromCORE(doi)],
+    ['DOAJ',             () => downloadFromDOAJ(doi)],
     ['arXiv',            () => downloadFromArxiv(doi)],
     ['Zenodo',           () => downloadFromZenodo(doi)],
+    ['DataCite',         () => downloadFromDataCite(doi)],
+    ['Figshare',         () => downloadFromFigshare(doi)],
     ['bioRxiv/medRxiv',  () => downloadFromBioRxiv(doi)],
+    ['OSF Preprints',    () => downloadFromOSF(doi)],
+    ['IA Scholar',       () => downloadFromFatcat(doi)],
+    ['HAL',              () => downloadFromHAL(doi)],
+    ['Crossref TDM',     () => downloadFromCrossref(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
@@ -1094,37 +1171,10 @@ export async function downloadPaper(
     progress(`✗ RISS — 오류`);
   }
 
-  // ─── Phase 2: Sci-Hub.run API (CF proxy 경유 — Render IP 차단 우회) ──────────────
-  // CF_PROXY_URL 환경변수가 설정된 경우에만 활성화
-  if (!skipSciHub && !isBookChapter && CF_PROXY_URL) {
-    const { rows: runRows } = await pool.query(
-      `SELECT id, name, url, type, status, avg_latency FROM download_servers WHERE url LIKE '%sci-hub.run%' AND is_active = true LIMIT 1`
-    );
-    if (runRows.length > 0) {
-      checkCancelled();
-      progress(`🔍 Sci-Hub API 캐시 확인 중...`);
-      const runResult = await downloadFromSciHubRun(doi, runRows[0] as ServerInfo);
-      if (runResult) {
-        progress(`✅ Sci-Hub API — PDF 확보`);
-        await pool.query(
-          `UPDATE download_servers SET success_rate = LEAST(100, COALESCE(success_rate,0)*0.95+5) WHERE id=$1`,
-          [runRows[0].id]
-        );
-        return runResult;
-      }
-      progress(`✗ Sci-Hub API — 없음`);
-    }
-  }
-
-  // ─── Phase 3: 병렬 미러 (sci-hub) — cloudscraper는 CF proxy 우회 불가,
-  //              현재 비활성화. CF Worker + headless-fetch 방식 지원 시 재활성화 예정.
-
   // ─── 최종 폴백 ──────────────────────────────────────────────────────────────────
-  if (skipSciHub) {
-    // 2023+ 논문: Sci-Hub 미지원 — 출판사/DOI 페이지로 안내
-    progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
-    return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
-  }
   progress(`⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.`);
   return { filePath: '', fileSize: 0, directUrl: `https://doi.org/${doi}` };
 }
+// OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
+// PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
+// Crossref TDM
