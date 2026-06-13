@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LangToggle from './LangToggle';
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
@@ -29,6 +30,8 @@ export default function Navbar() {
           <Link to="/report" className="text-slate-600 hover:text-slate-900 transition-colors hidden sm:block">
             에러 보고
           </Link>
+
+          <LangToggle />
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">
