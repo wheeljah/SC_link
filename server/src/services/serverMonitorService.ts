@@ -24,15 +24,8 @@ const PROTECTION_KEYWORDS = [
   'Please wait while we check your browser',
 ];
 
-/**
- * 서버 타입·URL에 맞는 헬스체크 URL 반환.
- * - sci-hub.run: CF 차단 우려 → FastAPI 백엔드 직접 확인
- * - 나머지: 서버 URL 그대로 사용
- */
+/** 서버 헬스체크 URL — 서버 URL 그대로 사용. */
 function getCheckUrl(server: ServerRow): string {
-  if (server.url.includes('sci-hub.run')) {
-    return 'https://fast.wbleb.com/';
-  }
   return server.url;
 }
 
@@ -118,17 +111,6 @@ export async function checkAllServers(): Promise<void> {
 }
 
 export function startMonitoringCron(): void {
-  // Sci-Hub: 5분 주기
-  cron.schedule('*/5 * * * *', async () => {
-    const { rows } = await pool.query<ServerRow>(
-      `SELECT id, name, url, type FROM download_servers WHERE is_active = true AND type = 'scihub'`
-    );
-    await Promise.allSettled(rows.map(async (s) => {
-      const r = await checkServer(s);
-      await updateServerStatus(s.id, r.status, r.latency);
-    }));
-  });
-
   // OA / Internet Archive: 10분 주기
   cron.schedule('*/10 * * * *', async () => {
     const { rows } = await pool.query<ServerRow>(

@@ -23,6 +23,11 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return isLoggedIn ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return user?.email === 'wheeljah@gmail.com' ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function Layout() {
   return (
     <>
@@ -37,7 +42,7 @@ function Layout() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ResetPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/servers" element={<Servers />} />
+          <Route path="/servers" element={<AdminRoute><Servers /></AdminRoute>} />
           <Route path="/community" element={<Community />} />
           <Route path="/community/:id" element={<CommunityDetail />} />
           <Route path="/community/new" element={

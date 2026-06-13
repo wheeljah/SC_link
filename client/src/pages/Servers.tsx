@@ -11,10 +11,11 @@ const STATUS_CONFIG = {
   OFFLINE:  { dot: 'bg-red-500',    badge: 'bg-red-50 text-red-700 border-red-200',           label: 'Offline'  },
   BLOCKED:  { dot: 'bg-slate-500',  badge: 'bg-slate-50 text-slate-700 border-slate-200',     label: 'Blocked'  },
   HIDDEN:   { dot: 'bg-slate-300',  badge: 'bg-white text-slate-500 border-slate-200',        label: 'Hidden'   },
+  AVAILABLE:{ dot: 'bg-green-500',  badge: 'bg-green-50 text-green-700 border-green-200',     label: '이용 가능' },
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  scihub: 'Sci-Hub', libgen: 'LibGen', zlibrary: 'Z-Library', archive: "Anna's Archive",
+  oa: 'Open Access', ia: 'Internet Archive',
 };
 
 export default function Servers() {
@@ -46,8 +47,12 @@ export default function Servers() {
     finally { setRefreshing(false); }
   };
 
-  const grouped = Object.entries(TYPE_LABELS).map(([type, label]) => ({
-    type, label, servers: servers.filter(s => s.type === type),
+  // 실제 존재하는 type으로 동적 그룹핑 (oa/ia 등 — 향후 타입도 자동 노출)
+  const types = Array.from(new Set(servers.map(s => s.type)));
+  const grouped = types.map(type => ({
+    type,
+    label: TYPE_LABELS[type] ?? type.toUpperCase(),
+    servers: servers.filter(s => s.type === type),
   }));
 
   if (loading) return (
@@ -80,7 +85,7 @@ export default function Servers() {
             </div>
             <div className="divide-y divide-slate-50">
               {grp.map(s => {
-                const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.OFFLINE;
+                const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.AVAILABLE;
                 const cred = credentials.find(c => c.serverId === s.id);
                 return (
                   <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors">

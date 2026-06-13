@@ -133,6 +133,13 @@ export async function testConnectivity(req: AuthRequest, res: Response): Promise
     { name: 'openalex.org',       url: 'https://api.openalex.org/works/doi:10.1038/nature12373?select=id' },
     { name: 'openaire.eu',        url: 'https://api.openaire.eu/graph/v1/researchProducts?doi=10.1038/nature12373&type=publication&pageSize=1&format=json' },
     { name: 'oa.mg',              url: 'https://api.oa.mg/v2/work?doi=10.1038/nature12373' },
+    { name: 'doaj.org',           url: 'https://doaj.org/api/v4/search/articles/doi:10.1371\\/journal.pone.0173664' },
+    { name: 'fatcat.wiki',        url: 'https://api.fatcat.wiki/v0/release/lookup?doi=10.1038/nature12373' },
+    { name: 'archives-ouvertes.fr', url: 'https://api.archives-ouvertes.fr/search/?q=*:*&fq=doiId_s:%2210.1038/nature12373%22&rows=1&wt=json' },
+    { name: 'crossref.org',       url: 'https://api.crossref.org/works/10.1038/nature12373' },
+    { name: 'osf.io',             url: 'https://api.osf.io/v2/preprints/?filter[doi]=10.31234/osf.io/abc12&page[size]=1' },
+    { name: 'datacite.org',       url: 'https://api.datacite.org/dois/10.5281/zenodo.31780' },
+    { name: 'figshare.com',       url: 'https://api.figshare.com/v2/articles?page_size=1' },
   ];
   const axios = (await import('axios')).default;
   const results = await Promise.all(targets.map(async t => {
