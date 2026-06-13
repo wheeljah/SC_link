@@ -248,8 +248,10 @@ export const EN: Record<string, string> = {
 
 
   // ── Footer notice ──
-  '본 서비스는 오픈액세스(OA) 논문의 공개 링크를 탐색·제공합니다. 논문 저작권은 원저자 및 출판사에 있으며, ScholarLink는 저작물을 직접 호스팅하지 않습니다.':
-    'This service searches and provides public links to open-access (OA) papers. Copyright belongs to the original authors and publishers; ScholarLink does not host any copyrighted content.',
+  '본 서비스는 오픈액세스(OA) 논문의 공개 링크를 탐색·제공합니다.':
+    'This service searches and provides public links to open-access (OA) papers.',
+  '논문 저작권은 원저자 및 출판사에 있으며, ScholarLink는 저작물을 직접 호스팅하지 않습니다.':
+    'Copyright belongs to the original authors and publishers; ScholarLink does not host any copyrighted content.',
   '상단·하단 광고는 서비스 운영비 충당을 위한 것입니다.': 'The ads shown on this site help cover operating costs.',
 
   // ── Search progress messages (server-sent) ──
