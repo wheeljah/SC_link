@@ -229,10 +229,33 @@ export const EN: Record<string, string> = {
   // ── api.ts ──
   '서버 응답 시간 초과. 잠시 후 다시 시도해주세요. (Render 무료 플랜은 첫 요청 시 30초가 소요될 수 있습니다.)':
     'Server response timed out. Please try again shortly. (On the Render free plan the first request can take up to 30 seconds.)',
+
+  // ── Ad banners ──
+  '광고': 'Ad',
+  '엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)': 'Stop hunting suppliers in Excel — BidVibe',
+  '지금 등록 →': 'Sign up now →',
+  '무료로 시작하기': 'Start free',
+  '비드바이브': 'BidVibe',
+  '비드바이브(BidVibe)': 'BidVibe',
+  '시약/장비 일단 띡! 견적요청만 올리면 됨': 'Reagents & equipment in one tap — just post a quote request',
+  '수수료 없는 연구자-공급사 매칭 플랫폼': 'A commission-free researcher–supplier matching platform',
+  '요청하면 견적이 다~ 온다 -- 수수료 없는 연구자-공급사 매칭 플랫폼':
+    'Post a request and the quotes roll in — a commission-free researcher–supplier matching platform',
+
+  // ── Search progress messages (server-sent) ──
+  '🔎 DOI 정보 확인 중...': '🔎 Checking DOI info...',
+  '🔍 RISS 국내 학술DB 확인 중...': '🔍 Checking RISS (Korean academic DB)...',
+  '⚠️ 무료 전문을 찾을 수 없습니다. 출판사 사이트를 확인해보세요.':
+    "⚠️ No free full text found. Please check the publisher's site.",
 };
 
 // 숫자 보간이 포함된 단일 텍스트 노드용 정규식 규칙
 export const RULES: [RegExp, string][] = [
+  // 검색 진행 메시지 (소스명 보간)
+  [/^🔍 (.+?) 확인 중\.\.\.$/, '🔍 Checking $1...'],
+  [/^✅ (.+?) — PDF 확보$/, '✅ $1 — PDF found'],
+  [/^✗ (.+?) — 없음$/, '✗ $1 — none'],
+  [/^✗ (.+?) — 오류$/, '✗ $1 — error'],
   [/^([\d,]+)명 \(7일\)$/, '$1 (7d)'],
   [/^([\d,]+)건 \(7일\)$/, '$1 (7d)'],
   [/^\+([\d,]+)명 \(7일\)$/, '+$1 (7d)'],
