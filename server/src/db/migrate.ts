@@ -189,7 +189,12 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('Crossref TDM',     'https://api.crossref.org',         'oa',  false, 'International', '출판사 등록 text-mining 전문 링크 — key 불필요'),
   ('OSF Preprints',    'https://api.osf.io',               'oa',  false, 'International', 'PsyArXiv·SocArXiv 등 프리프린트 통합 — key 불필요'),
   ('DataCite',         'https://api.datacite.org',         'oa',  false, 'International', '데이터셋·학위논문·기관 리포지터리 DOI — key 불필요'),
-  ('Figshare',         'https://api.figshare.com',         'oa',  false, 'International', '그림·포스터·학위논문·프리프린트 등 공개 자료 — key 불필요')
+  ('Figshare',         'https://api.figshare.com',         'oa',  false, 'International', '그림·포스터·학위논문·프리프린트 등 공개 자료 — key 불필요'),
+  ('INSPIRE-HEP',       'https://inspirehep.net',           'oa',  false, 'International', '고에너지물리·천체물리 — arXiv ID 경유 PDF 취득, 150만+ 레코드'),
+  ('NASA NTRS',         'https://ntrs.nasa.gov',            'oa',  false, 'USA',           'NASA 기술보고서 서버 — 항공우주·우주탐사 전문, 공개 보고서 직접 다운로드'),
+  ('OAPEN',             'https://library.oapen.org',        'oa',  false, 'International', 'Open Access Publishing in European Networks — 50,000+ OA 학술 도서, DSpace REST API'),
+  ('DOAB',              'https://doabooks.org',             'oa',  false, 'International', '오픈액세스 도서 디렉터리 — OA 도서 메타데이터·PDF 링크 색인, 80,000+ 타이틀'),
+  ('IA Books',          'https://archive.org',              'oa',  false, 'International', 'Internet Archive 텍스트 아카이브 — 공개 도메인·OA 도서 전문, DOI 검색')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너

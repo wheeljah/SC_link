@@ -15,7 +15,11 @@ export const EN: Record<string, string> = {
   // ── Home / landing ──
   '저널 URL': 'Journal URL',
   '17개 오픈액세스 소스': '17 open-access sources',
+  '23개 오픈액세스 소스': '23 open-access sources',
+  'OA 서버 지속 업데이트 중': 'OA sources continuously expanding',
+  '학술논문 · 도서 통합 검색': 'Unified search for papers & books',
   '오픈액세스 논문/자료, 한 번에 검색': 'Open-access papers & resources, all in one search',
+  'DOI · PubMed ID · arXiv ID · 저널 URL 입력으로 OA 논문과 학술 도서를 바로 검색합니다.': 'Enter a DOI, PubMed ID, arXiv ID, or journal URL to instantly search OA papers and academic books.',
   '학술논문/도서, 한 번에 검색': 'Scholarly papers & books, all in one search',
   'DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 검색가능합니다.':
     'Enter a DOI, PubMed ID, arXiv ID, or journal URL to search instantly.',
@@ -278,4 +282,8 @@ export const RULES: [RegExp, string][] = [
   [/^([\d,]+)개$/, '$1'],
   [/^가입자 \(([\d,]+)\)$/, 'Users ($1)'],
   [/^다운로드 이력 \(([\d,]+)\)$/, 'Downloads ($1)'],
+  // 동적 카운트 문자열
+  [/^(\d+)개 준비됨$/, '$1 ready'],
+  [/^총 (\d+)개 서버$/, 'Total $1 servers'],
+  [/^총 (\d+)건$/, 'Total $1'],
 ];

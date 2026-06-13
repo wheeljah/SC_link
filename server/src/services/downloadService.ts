@@ -1109,6 +1109,189 @@ async function downloadFromInternetArchive(doi: string, _server: ServerInfo): Pr
   }
 }
 
+
+// ─── INSPIRE-HEP (고에너지물리·천체물리 → arXiv ID 경유) ─────────────────────
+// 150만+ 레코드. DOI → arXiv ID → arXiv PDF URL.
+async function downloadFromInspireHEP(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://inspirehep.net/api/literature',
+      {
+        params: { q: `doi:${doi}`, fields: 'arxiv_eprints', size: 1, sort: 'mostrecent' },
+        timeout: 10000,
+        headers: { 'User-Agent': 'ScholarLink/1.0' },
+      }
+    );
+    const hit = res.data?.hits?.hits?.[0];
+    const arxivId: string | undefined = hit?.metadata?.arxiv_eprints?.[0]?.value;
+    if (!arxivId) { console.log(`[inspirehep] No arXiv ID for ${doi}`); return null; }
+    console.log(`[inspirehep] ${doi} -> arXiv:${arxivId}`);
+    return await downloadFileFromUrl(`https://arxiv.org/pdf/${arxivId}`, doi, 'inspire_');
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[inspirehep] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── NASA Technical Reports Server (항공우주·NASA 기술보고서) ─────────────────
+// 공개 NASA 보고서 직접 다운로드. submissionId 기반 PDF URL 패턴.
+async function downloadFromNASA(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://ntrs.nasa.gov/api/citations/search',
+      {
+        params: { q: doi, pageSize: 1 },
+        timeout: 10000,
+        headers: { 'User-Agent': 'ScholarLink/1.0' },
+      }
+    );
+    const hit = res.data?.results?.[0];
+    if (!hit || hit.distribution !== 'PUBLIC') return null;
+    const id: number | undefined = hit.submissionId;
+    if (!id) return null;
+    const pdfUrl = `https://ntrs.nasa.gov/api/citations/${id}/downloads/${id}_DS01.pdf`;
+    console.log(`[nasa] ${doi} -> NTRS ${id}`);
+    return await downloadFileFromUrl(pdfUrl, doi, 'nasa_');
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[nasa] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── OAPEN (Open Access Publishing in European Networks) ─────────────────────
+// 50,000+ OA 학술 도서. DSpace REST API로 DOI → 비트스트림 PDF URL 취득.
+async function downloadFromOAPEN(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://library.oapen.org/rest/search',
+      {
+        params: {
+          query: `dc.identifier.uri:${doi} OR dc.identifier.doi:${doi}`,
+          expand: 'bitstreams,metadata',
+          limit: 1,
+        },
+        timeout: 12000,
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/json' },
+      }
+    );
+    const items: Array<{
+      handle?: string;
+      bitstreams?: Array<{ name?: string; mimeType?: string; retrieveLink?: string }>;
+      metadata?: Array<{ key: string; value: string }>;
+    }> = res.data ?? [];
+    if (!items.length) { console.log(`[oapen] Not found: ${doi}`); return null; }
+
+    const item = items[0];
+    const pdfBitstream = (item.bitstreams ?? []).find(
+      b => b.mimeType === 'application/pdf' || b.name?.toLowerCase().endsWith('.pdf')
+    );
+    if (!pdfBitstream?.retrieveLink) { console.log(`[oapen] No PDF bitstream: ${doi}`); return null; }
+
+    const pdfUrl = `https://library.oapen.org${pdfBitstream.retrieveLink}`;
+    const getMeta = (key: string) => item.metadata?.find(m => m.key === key)?.value;
+    const title     = getMeta('dc.title');
+    const authors   = getMeta('dc.contributor.author');
+    const yearStr   = getMeta('dc.date.issued') ?? getMeta('dc.date.available');
+    const year      = yearStr ? parseInt(yearStr.slice(0, 4), 10) : undefined;
+    const publisher = getMeta('dc.publisher');
+
+    console.log(`[oapen] ${doi} -> ${pdfUrl}`);
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'oapen_');
+    if (!result) return null;
+    return { ...result, title, authors: authors || undefined, year, journal: publisher };
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[oapen] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── DOAB (Directory of Open Access Books) ───────────────────────────────────
+// OA 도서 메타데이터 색인. API로 DOI -> 출판사 PDF URL 취득.
+async function downloadFromDOAB(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      'https://doabooks.org/api/v1/book',
+      {
+        params: { doi },
+        timeout: 10000,
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/json' },
+      }
+    );
+    const book = res.data;
+    if (!book) { console.log(`[doab] Not found: ${doi}`); return null; }
+
+    const links: Array<{ url?: string; type?: string }> = book.links ?? [];
+    const pdfLink = links.find((l: { url?: string }) => l.url?.toLowerCase().endsWith('.pdf'))
+      ?? links.find((l: { type?: string }) => l.type === 'fulltext' || l.type === 'download');
+    const pdfUrl = pdfLink?.url as string | undefined;
+    if (!pdfUrl) { console.log(`[doab] No PDF link: ${doi}`); return null; }
+
+    const title     = (book.title ?? book.name) as string | undefined;
+    const authors   = ((book.authors ?? []) as string[]).join(', ') || undefined;
+    const yearVal   = book.publishedAt as string | number | undefined;
+    const year      = yearVal ? parseInt(String(yearVal).slice(0, 4), 10) : undefined;
+    const pubRaw    = book.publisher;
+    const publisher = typeof pubRaw === 'object' && pubRaw !== null
+      ? (pubRaw as { name?: string }).name
+      : (pubRaw as string | undefined);
+
+    console.log(`[doab] ${doi} -> ${pdfUrl}`);
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'doab_');
+    if (!result) return null;
+    return { ...result, title, authors, year, journal: publisher };
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[doab] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
+// ─── Internet Archive Books (텍스트 전문 아카이브) ───────────────────────────
+// DOI로 IA 텍스트 컬렉션 검색 후 PDF 다운로드. 공개 도메인 및 OA 도서 커버.
+async function downloadFromIABooks(doi: string): Promise<DownloadResult | null> {
+  try {
+    const searchRes = await axios.get(
+      'https://archive.org/advancedsearch.php',
+      {
+        params: {
+          q: `"${doi}" AND mediatype:texts`,
+          'fl[]': 'identifier,title,creator,date',
+          rows: 1,
+          output: 'json',
+        },
+        timeout: 10000,
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
+      }
+    );
+    const docs = (searchRes.data?.response?.docs ?? []) as Array<{
+      identifier: string; title?: string; creator?: string | string[]; date?: string;
+    }>;
+    if (!docs.length) { console.log(`[ia-books] Not found: ${doi}`); return null; }
+
+    const { identifier, title, creator, date } = docs[0];
+    if (!identifier) return null;
+
+    const metaRes = await axios.get(
+      `https://archive.org/metadata/${identifier}`,
+      { timeout: 10000, headers: { 'User-Agent': 'ScholarLink/1.0' } }
+    );
+    const files = (metaRes.data?.files ?? []) as Array<{ name: string; format?: string }>;
+    const pdfFile = files.find(f => f.format === 'Text PDF' || f.name.endsWith('.pdf'));
+    if (!pdfFile) { console.log(`[ia-books] No PDF in ${identifier}`); return null; }
+
+    const pdfUrl  = `https://archive.org/download/${identifier}/${pdfFile.name}`;
+    const authors = Array.isArray(creator) ? creator.join(', ') : creator;
+    const year    = date ? parseInt(String(date).slice(0, 4), 10) : undefined;
+
+    console.log(`[ia-books] ${doi} -> IA:${identifier}`);
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'ia_books_');
+    if (!result) return null;
+    return { ...result, title, authors: authors || undefined, year };
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[ia-books] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(
   doi: string,
@@ -1144,6 +1327,11 @@ export async function downloadPaper(
     ['IA Scholar',       () => downloadFromFatcat(doi)],
     ['HAL',              () => downloadFromHAL(doi)],
     ['Crossref TDM',     () => downloadFromCrossref(doi)],
+    ['INSPIRE-HEP',      () => downloadFromInspireHEP(doi)],
+    ['NASA NTRS',        () => downloadFromNASA(doi)],
+    ['OAPEN',            () => downloadFromOAPEN(doi)],
+    ['DOAB',             () => downloadFromDOAB(doi)],
+    ['IA Books',         () => downloadFromIABooks(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
@@ -1177,4 +1365,4 @@ export async function downloadPaper(
 }
 // OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
 // PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
-// Crossref TDM
+// Crossref TDM, INSPIRE-HEP, NASA NTRS, OAPEN, DOAB, IA Books
