@@ -4,7 +4,7 @@
 
 @layer base {
   html { @apply scroll-smooth; }
-  body { @apply bg-slate-50 text-slate-900 antialiased; }
+  body { @apply bg-slate-50 text-slate-900 antialiased font-sans; }
 }
 
 @layer utilities {
