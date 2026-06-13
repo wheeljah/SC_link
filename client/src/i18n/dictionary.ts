@@ -61,6 +61,7 @@ export const EN: Record<string, string> = {
   '등록 중...': 'Submitting...',
   '등록': 'Submit',
   '전체 보고 목록': 'All reports',
+  '전체 보고 목록 →': 'All reports →',
   '인용 ': 'Cited ',
 
   // ── ServerStatus / Servers ──
