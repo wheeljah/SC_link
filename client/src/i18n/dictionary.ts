@@ -13,6 +13,8 @@ export const EN: Record<string, string> = {
   '회원가입': 'Sign up',
 
   // ── Home / landing ──
+  '저널 URL': 'Journal URL',
+  '17개 오픈액세스 소스': '17 open-access sources',
   '오픈액세스 논문/자료, 한 번에 검색': 'Open-access papers & resources, all in one search',
   '학술논문/도서, 한 번에 검색': 'Scholarly papers & books, all in one search',
   'DOI, PubMed ID, arXiv ID, 저널 URL을 입력하면 바로 검색가능합니다.':

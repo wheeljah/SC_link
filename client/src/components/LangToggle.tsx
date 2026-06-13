@@ -10,9 +10,9 @@ export default function LangToggle() {
       aria-label="Toggle language"
       title={lang === 'ko' ? 'Switch to English' : '한국어로 전환'}
     >
-      <span className={`text-xs font-semibold ${lang === 'ko' ? 'text-teal-600' : 'text-slate-400'}`}>KR</span>
+      <span className={`text-xs font-semibold ${lang === 'ko' ? 'text-brand-600' : 'text-slate-400'}`}>KR</span>
       <span className="text-slate-300 mx-0.5 text-xs">/</span>
-      <span className={`text-xs font-semibold ${lang === 'en' ? 'text-teal-600' : 'text-slate-400'}`}>EN</span>
+      <span className={`text-xs font-semibold ${lang === 'en' ? 'text-brand-600' : 'text-slate-400'}`}>EN</span>
     </button>
   );
 }

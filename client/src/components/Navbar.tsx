@@ -48,7 +48,7 @@ export default function Navbar() {
               <Link to="/login" className={link}>로그인</Link>
               <Link
                 to="/register"
-                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+                className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
               >
                 회원가입
               </Link>
