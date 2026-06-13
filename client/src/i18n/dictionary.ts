@@ -232,6 +232,7 @@ export const EN: Record<string, string> = {
     'Server response timed out. Please try again shortly. (On the Render free plan the first request can take up to 30 seconds.)',
 
   // ── Ad banners ──
+  '엑셀로 공급사 그만 찾기': 'Stop hunting suppliers in Excel',
   '광고': 'Ad',
   '엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)': 'Stop hunting suppliers in Excel — BidVibe',
   '지금 등록 →': 'Sign up now →',
