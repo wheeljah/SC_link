@@ -462,7 +462,7 @@ export default function Home() {
 
 
         {/* ── 하단 고지 ── */}
-        <p className="text-xs text-slate-400 text-center leading-relaxed px-2">
+        <p className="text-xs text-slate-400 text-center leading-relaxed px-2 break-keep">
           <span>본 서비스는 오픈액세스(OA) 논문의 공개 링크를 탐색·제공합니다. 논문 저작권은 원저자 및 출판사에 있으며, ScholarLink는 저작물을 직접 호스팅하지 않습니다.</span>
           <br />
           <span>상단·하단 광고는 서비스 운영비 충당을 위한 것입니다.</span>
