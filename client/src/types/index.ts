@@ -11,7 +11,7 @@ export interface DownloadServer {
   id: number;
   name: string;
   url: string;
-  type: 'scihub' | 'libgen' | 'zlibrary' | 'archive';
+  type: 'scihub' | 'libgen' | 'zlibrary' | 'archive' | 'ia' | 'oa';
   status: 'ONLINE' | 'SLOW' | 'OFFLINE' | 'BLOCKED' | 'CHECKING' | 'HIDDEN';
   last_checked: string | null;
   avg_latency: number;

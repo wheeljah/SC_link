@@ -24,11 +24,11 @@ export default function Navbar() {
 
         {/* 모바일에서도 모든 항목 노출 — 넘치면 가로 스크롤 */}
         <div className="flex items-center gap-4 text-sm overflow-x-auto scrollbar-hide min-w-0">
-          <Link to="/servers" className={link}>서버 상태</Link>
+          <LangToggle />
+
+          {isAdmin && <Link to="/servers" className={link}>서버 상태</Link>}
           <Link to="/community" className={link}>커뮤니티</Link>
           <Link to="/report" className={link}>에러 보고</Link>
-
-          <LangToggle />
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3 shrink-0">
