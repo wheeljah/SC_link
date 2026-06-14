@@ -5,6 +5,48 @@ import { pool } from '../db/pool';
 import { sendVerificationEmail, sendPasswordResetEmail, getEmailProviderStatus } from '../services/emailService';
 import { signToken, AuthRequest } from '../middleware/auth';
 
+// ── 행정구역 코드 매핑 (ipapi.co region 문자열 → 내부 코드) ──────────────
+const REGION_MAP: Record<string, string> = {
+  seoul: 'seoul', busan: 'busan', daegu: 'daegu', incheon: 'incheon',
+  gwangju: 'gwangju', daejeon: 'daejeon', ulsan: 'ulsan',
+  sejong: 'sejong', gyeonggi: 'gyeonggi', gangwon: 'gangwon',
+  'north chungcheong': 'chungbuk', 'south chungcheong': 'chungnam',
+  chungcheongbuk: 'chungbuk', chungcheongnam: 'chungnam',
+  'north jeolla': 'jeonbuk', 'south jeolla': 'jeonnam',
+  'north gyeongsang': 'gyeongbuk', 'south gyeongsang': 'gyeongnam',
+  gyeongsangbuk: 'gyeongbuk', gyeongsangnam: 'gyeongnam',
+  jeollabuk: 'jeonbuk', jeollanam: 'jeonnam',
+  jeju: 'jeju',
+};
+
+function mapRegion(raw: string): string | null {
+  if (!raw) return null;
+  const key = raw.toLowerCase()
+    .replace(/-do$/, '').replace(/-si$/, '').replace(' special self-governing.*', '')
+    .replace(' special.*', '').trim();
+  for (const [k, v] of Object.entries(REGION_MAP)) {
+    if (key === k || key.startsWith(k) || k.startsWith(key)) return v;
+  }
+  return null;
+}
+
+async function detectRegionFromIp(ip: string): Promise<string | null> {
+  try {
+    const cleanIp = ip.replace(/^::ffff:/, ''); // IPv4-mapped IPv6 제거
+    if (cleanIp === '127.0.0.1' || cleanIp === '::1') return null;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(`https://ipapi.co/${cleanIp}/json/`);
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const data = await res.json() as { region?: string; country?: string };
+    if (data.country !== 'KR') return null;
+    return mapRegion(data.region || '');
+  } catch {
+    return null;
+  }
+}
+
 /** 이메일 발송에 타임아웃 적용 (15초 초과 시 오류 대신 경고만 남김) */
 async function sendVerificationEmailWithTimeout(email: string, token: string): Promise<string | null> {
   const timeout = new Promise<never>((_, reject) =>
@@ -14,10 +56,17 @@ async function sendVerificationEmailWithTimeout(email: string, token: string): P
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, nickname } = req.body;
+  const { email, password, nickname, region } = req.body;
 
   if (!email || !password) {
     res.status(400).json({ success: false, message: '이메일과 비밀번호를 입력해주세요.' });
+    return;
+  }
+  const VALID_REGIONS = ['seoul','busan','daegu','incheon','gwangju','daejeon','ulsan',
+    'sejong','gyeonggi','gangwon','chungbuk','chungnam','jeonbuk','jeonnam',
+    'gyeongbuk','gyeongnam','jeju'];
+  if (!region || !VALID_REGIONS.includes(region)) {
+    res.status(400).json({ success: false, message: '행정구역을 선택해주세요.' });
     return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -36,9 +85,12 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const hash = await bcrypt.hash(password, 12);
+  // IP 기반 행정구역 감지 (비동기, 실패해도 가입 계속)
+  const regionIp = await detectRegionFromIp(req.ip || '').catch(() => null);
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, nickname) VALUES ($1, $2, $3) RETURNING id`,
-    [email.toLowerCase(), hash, nickname || null]
+    `INSERT INTO users (email, password_hash, nickname, region, region_ip)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [email.toLowerCase(), hash, nickname || null, region, regionIp]
   );
   const userId = rows[0].id;
 

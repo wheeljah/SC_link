@@ -238,6 +238,9 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
           WHERE position = 'BOTTOM' AND advertiser_name = 'BidVibe'`,
     params: ['엑셀로 공급사 그만 찾고, 비드바이브(BidVibe)'],
   },
+  // 행정구역 컬럼 추가
+  { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS region VARCHAR(20)`, params: [] },
+  { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS region_ip VARCHAR(20)`, params: [] },
 ];
 
 export async function migrate(): Promise<void> {
