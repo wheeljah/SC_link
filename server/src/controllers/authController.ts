@@ -204,7 +204,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   const { rows } = await pool.query(
-    `SELECT id, email, password_hash, nickname, email_verified, tier, download_count FROM users WHERE email = $1`,
+    `SELECT id, email, password_hash, nickname, email_verified, tier, download_count, region FROM users WHERE email = $1`,
     [email.toLowerCase()]
   );
   const user = rows[0];
@@ -219,6 +219,16 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [user.id]);
+
+  // 기존 가입자 중 region 없는 경우 → 로그인 시 IP 기반 자동 저장 (non-blocking)
+  if (!user.region) {
+    detectRegionFromIp(req.ip || '').then(regionIp => {
+      if (regionIp) {
+        pool.query(`UPDATE users SET region_ip = $1 WHERE id = $2 AND region IS NULL`, [regionIp, user.id]).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
   const token = signToken(user.id, user.email);
 
   res.json({

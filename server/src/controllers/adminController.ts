@@ -36,7 +36,7 @@ export async function listUsers(req: AuthRequest, res: Response): Promise<void> 
   const offset = (page - 1) * limit;
   const [{ rows }, { rows: cnt }] = await Promise.all([
     pool.query(
-      `SELECT id, email, nickname, tier, download_count, email_verified, last_login_at, created_at
+      `SELECT id, email, nickname, tier, download_count, email_verified, last_login_at, created_at, region, region_ip
        FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
       [limit, offset]
     ),

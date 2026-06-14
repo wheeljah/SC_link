@@ -13,6 +13,7 @@ interface User {
   id: number; email: string; nickname: string | null; tier: string;
   download_count: number; email_verified: boolean;
   last_login_at: string | null; created_at: string;
+  region: string | null; region_ip: string | null;
 }
 interface Download {
   id: number; input_type: string; input_value: string;
@@ -198,6 +199,7 @@ export default function Admin() {
                     <th className="pb-2 pr-4">인증</th>
                     <th className="pb-2 pr-4">다운로드</th>
                     <th className="pb-2 pr-4">가입일</th>
+                    <th className="pb-2 pr-4">지역</th>
                     <th className="pb-2">삭제</th>
                   </tr>
                 </thead>
@@ -214,6 +216,7 @@ export default function Admin() {
                       </td>
                       <td className="py-2 pr-4">{u.download_count}</td>
                       <td className="py-2 pr-4 text-slate-400 text-xs">{new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+                      <td className="py-2 pr-4 text-xs text-slate-500">{u.region || u.region_ip || '-'}</td>
                       <td className="py-2">
                         {u.email !== ADMIN_EMAIL && (
                           <button onClick={() => handleDeleteUser(u.id, u.email)}
