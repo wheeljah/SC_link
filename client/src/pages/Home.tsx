@@ -47,13 +47,23 @@ export default function Home() {
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportError, setReportError] = useState('');
   const [reportSuccess, setReportSuccess] = useState(false);
+  const [communityPreviews, setCommunityPreviews] = useState<{ id: number; title: string; response_count: number }[]>([]);
+  const [communityTotal, setCommunityTotal] = useState(0);
   const { isLoggedIn } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
 
   const cancelDownload = () => {
     window.location.reload();
-  };
+  }
+
+  // 커뮤니티 미리보기 (최신 2건)
+  useState(() => {
+    fetch(`${getApiBaseURL()}/community/requests?limit=2`)
+      .then(r => r.json())
+      .then(j => { if (j.success) { setCommunityPreviews(j.data); setCommunityTotal(j.total); } })
+      .catch(() => {});
+  });;
 
   const handleButtonClick = () => {
     if (loading) { cancelDownload(); return; }
@@ -261,7 +271,7 @@ export default function Home() {
                 />
               </div>
               {logs.length > 0 && (
-                <div className="bg-navy/95 border border-slate-800 rounded-xl px-3 py-2 max-h-40 overflow-y-auto font-mono text-xs">
+                <div className="bg-navy/95 border border-slate-800 rounded-xl px-3 py-2 max-h-24 overflow-y-auto font-mono text-xs">
                   {logs.map((log, i) => {
                     const isOk  = log.startsWith('✅');
                     const isFail = log.startsWith('✗');
@@ -394,11 +404,31 @@ export default function Home() {
                 <IconUsers className="w-4 h-4" />
               </span>
               커뮤니티 요청
+              {communityTotal > 0 && (
+                <span className="text-xs font-medium text-brand-600 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-full">
+                  총 {communityTotal}건
+                </span>
+              )}
             </h3>
             <Link to="/community" className="text-sm text-brand-700 font-medium hover:underline">전체 보기</Link>
           </div>
           <p className="text-sm text-slate-500">원하는 논문을 요청하거나, 다른 연구자의 요청에 응답하세요.</p>
-          <div className="mt-4 flex gap-2">
+          {communityPreviews.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {communityPreviews.map(r => (
+                <li key={r.id}>
+                  <Link
+                    to={`/community/${r.id}`}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors"
+                  >
+                    <span className="text-sm text-navy truncate">{r.title}</span>
+                    <span className="text-xs text-slate-400 shrink-0">답변 {r.response_count}건</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 flex gap-2">
             <Link
               to="/community"
               className="text-sm border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition-colors"
