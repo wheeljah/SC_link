@@ -934,6 +934,50 @@ async function downloadFromFigshare(doi: string): Promise<DownloadResult | null>
   }
 }
 
+// ─── ChemRxiv (Cambridge Open Engage) ────────────────────────────────────────
+// 화학·재료 프리프린트 — 공개 API, key 불필요. item.asset.original.url = PDF.
+async function downloadFromChemRxiv(doi: string): Promise<DownloadResult | null> {
+  try {
+    const res = await axios.get(
+      `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/doi/${encodeURIComponent(doi)}`,
+      { timeout: 10000, headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/json' } }
+    );
+    const item = res.data;
+    const url: string | undefined = item?.asset?.original?.url ?? item?.asset?.url;
+    if (!url) { console.log(`[chemrxiv] No asset for ${doi}`); return null; }
+    const title: string | undefined = item?.title;
+    const dateStr: string | undefined = item?.publishedDate ?? item?.statusDate;
+    const year = dateStr ? parseInt(String(dateStr).slice(0, 4)) : undefined;
+    const authors = (item?.authors ?? []).slice(0, 5)
+      .map((a: { firstName?: string; lastName?: string }) => [a.firstName, a.lastName].filter(Boolean).join(' '))
+      .filter(Boolean).join(', ');
+    const r = await downloadFileFromUrl(url, doi, 'chemrxiv_');
+    if (r) { console.log(`[chemrxiv] ✅ PDF 확보: ${doi}`); return { ...r, title, authors: authors || undefined, year }; }
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) return null;
+      console.log(`[chemrxiv] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ─── Preprints.org (MDPI) ────────────────────────────────────────────────────
+// DOI 패턴(10.20944/preprintsYYYYMM.NNNN.vK)에서 직접 PDF URL 구성 — key 불필요.
+async function downloadFromPreprintsOrg(doi: string): Promise<DownloadResult | null> {
+  const m = doi.match(/^10\.20944\/preprints(\d{6}\.\d+)\.(v\d+)$/i);
+  if (!m) return null; // preprints.org DOI가 아니면 건너뜀
+  const pdfUrl = `https://www.preprints.org/manuscript/${m[1]}/${m[2]}/download`;
+  console.log(`[preprints.org] ${doi} → ${pdfUrl}`);
+  try {
+    return await downloadFileFromUrl(pdfUrl, doi, 'preprintsorg_');
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[preprints.org] ${e.response?.status} ${e.message}`);
+    return null;
+  }
+}
+
 // ─── Unpaywall (Open Access) ─────────────────────────────────────────────────
 interface UnpaywallLocation {
   url?: string;
@@ -1324,6 +1368,8 @@ export async function downloadPaper(
     ['Figshare',         () => downloadFromFigshare(doi)],
     ['bioRxiv/medRxiv',  () => downloadFromBioRxiv(doi)],
     ['OSF Preprints',    () => downloadFromOSF(doi)],
+    ['ChemRxiv',         () => downloadFromChemRxiv(doi)],
+    ['Preprints.org',    () => downloadFromPreprintsOrg(doi)],
     ['IA Scholar',       () => downloadFromFatcat(doi)],
     ['HAL',              () => downloadFromHAL(doi)],
     ['Crossref TDM',     () => downloadFromCrossref(doi)],

@@ -194,7 +194,9 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('NASA NTRS',         'https://ntrs.nasa.gov',            'oa',  false, 'USA',           'NASA 기술보고서 서버 — 항공우주·우주탐사 전문, 공개 보고서 직접 다운로드'),
   ('OAPEN',             'https://library.oapen.org',        'oa',  false, 'International', 'Open Access Publishing in European Networks — 50,000+ OA 학술 도서, DSpace REST API'),
   ('DOAB',              'https://doabooks.org',             'oa',  false, 'International', '오픈액세스 도서 디렉터리 — OA 도서 메타데이터·PDF 링크 색인, 80,000+ 타이틀'),
-  ('IA Books',          'https://archive.org',              'oa',  false, 'International', 'Internet Archive 텍스트 아카이브 — 공개 도메인·OA 도서 전문, DOI 검색')
+  ('IA Books',          'https://archive.org',              'oa',  false, 'International', 'Internet Archive 텍스트 아카이브 — 공개 도메인·OA 도서 전문, DOI 검색'),
+  ('ChemRxiv',          'https://chemrxiv.org',             'oa',  false, 'International', '화학·재료 프리프린트 — Cambridge Open Engage API, key 불필요'),
+  ('Preprints.org',     'https://www.preprints.org',        'oa',  false, 'International', 'MDPI 프리프린트 — DOI 패턴 직접 PDF, key 불필요')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너
