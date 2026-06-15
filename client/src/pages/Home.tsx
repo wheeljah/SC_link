@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
@@ -58,12 +58,12 @@ export default function Home() {
   }
 
   // 커뮤니티 미리보기 (최신 2건)
-  useState(() => {
+  useEffect(() => {
     fetch(`${getApiBaseURL()}/community/requests?limit=2`)
       .then(r => r.json())
       .then(j => { if (j.success) { setCommunityPreviews(j.data); setCommunityTotal(j.total); } })
       .catch(() => {});
-  });;
+  }, []);;
 
   const handleButtonClick = () => {
     if (loading) { cancelDownload(); return; }
