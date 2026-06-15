@@ -197,7 +197,7 @@ export async function resendVerification(req: Request, res: Response): Promise<v
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
   if (!email || !password) {
     res.status(400).json({ success: false, message: '이메일과 비밀번호를 입력해주세요.' });
     return;
@@ -229,7 +229,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     }).catch(() => {});
   }
 
-  const token = signToken(user.id, user.email);
+  const token = signToken(user.id, user.email, !!rememberMe);
 
   res.json({
     success: true,

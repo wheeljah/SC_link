@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
-    res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+    res.status(401).json({ success: false, message: '\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.' });
     return;
   }
 
@@ -27,7 +27,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
         [payload.jti]
       );
       if (rows.length > 0) {
-        res.status(401).json({ success: false, message: '로그아웃된 토큰입니다.' });
+        res.status(401).json({ success: false, message: '\uB85C\uADF8\uC544\uC6C3\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4.' });
         return;
       }
     }
@@ -36,12 +36,15 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     req.userEmail = payload.email as string;
     next();
   } catch {
-    res.status(401).json({ success: false, message: '유효하지 않은 토큰입니다.' });
+    res.status(401).json({ success: false, message: '\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD1A0\uD070\uC785\uB2C8\uB2E4.' });
   }
 }
 
-export function signToken(userId: number, email: string): string {
+export function signToken(userId: number, email: string, rememberMe = false): string {
   const jti = crypto.randomBytes(16).toString('hex');
-  const expiresIn = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
+  const expiresIn = (rememberMe
+    ? (process.env.JWT_EXPIRES_LONG || '30d')
+    : (process.env.JWT_EXPIRES_IN  || '1d')
+  ) as SignOptions['expiresIn'];
   return jwt.sign({ sub: String(userId), email, jti }, JWT_SECRET, { expiresIn });
 }

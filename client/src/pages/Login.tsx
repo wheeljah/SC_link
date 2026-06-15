@@ -7,6 +7,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [needVerify, setNeedVerify] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -22,7 +23,7 @@ export default function Login() {
     setResendStatus('idle');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       navigate(from, { replace: true });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string; needVerification?: boolean } } };
@@ -81,6 +82,19 @@ export default function Login() {
               placeholder="••••••••"
               className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+            />
+            <label htmlFor="rememberMe" className="text-sm text-slate-600 cursor-pointer select-none">
+              로그인 상태 유지 <span className="text-slate-400">(30일)</span>
+            </label>
           </div>
 
           {error && (

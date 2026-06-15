@@ -5,7 +5,7 @@ import api from '../services/api';
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   isLoggedIn: boolean;
 }
@@ -14,23 +14,33 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+    try {
+      return JSON.parse(
+        localStorage.getItem('user') || sessionStorage.getItem('user') || 'null'
+      );
+    } catch { return null; }
   });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem('token') || sessionStorage.getItem('token')
+  );
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post('/auth/login', { email, password });
+  const login = useCallback(async (email: string, password: string, rememberMe = false) => {
+    const res = await api.post('/auth/login', { email, password, rememberMe });
     const { token: t, user: u } = res.data.data;
-    localStorage.setItem('token', t);
-    localStorage.setItem('user', JSON.stringify(u));
+    const store = rememberMe ? localStorage : sessionStorage;
+    // 이전 저장소 정리 후 새 저장소에 저장
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    sessionStorage.removeItem('token'); sessionStorage.removeItem('user');
+    store.setItem('token', t);
+    store.setItem('user', JSON.stringify(u));
     setToken(t);
     setUser(u);
   }, []);
 
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout'); } catch { /* silent */ }
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    sessionStorage.removeItem('token'); sessionStorage.removeItem('user');
     setToken(null);
     setUser(null);
   }, []);
