@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import ServerStatus from '../components/ServerStatus';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../context/AuthContext';
-import { getApiBaseURL, getBackendOrigin } from '../services/api';
+import { getApiBaseURL, getBackendOrigin, initPromise } from '../services/api';
 
 // ── 인라인 라인 아이콘 (의존성 없음) ──
 type IconProps = { className?: string };
@@ -57,13 +57,15 @@ export default function Home() {
     window.location.reload();
   }
 
-  // 커뮤니티 미리보기 (최신 2건)
+  // 커뮤니티 미리보기 (최신 2건) — initPromise 완료 후 fetch
   useEffect(() => {
-    fetch(`${getApiBaseURL()}/community/requests?limit=2`)
-      .then(r => r.json())
-      .then(j => { if (j.success) { setCommunityPreviews(j.data); setCommunityTotal(j.total); } })
-      .catch(() => {});
-  }, []);;
+    initPromise.then(() => {
+      fetch(`${getApiBaseURL()}/community/requests?limit=2`)
+        .then(r => r.json())
+        .then(j => { if (j.success) { setCommunityPreviews(j.data); setCommunityTotal(j.total); } })
+        .catch(() => {});
+    });
+  }, []);
 
   const handleButtonClick = () => {
     if (loading) { cancelDownload(); return; }
