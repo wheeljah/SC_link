@@ -104,7 +104,15 @@ export default function Admin() {
     const j = await res.json();
     setMsg(`${j.deleted}건 삭제 완료`);
     loadDownloads(1); setDlPage(1); loadStats();
-  };
+  }
+
+  const handleResendUnverified = async () => {
+    if (!confirm('미인증 사용자 전체에게 인증 메일을 재발송하시겠습니까?')) return;
+    setMsg('발송 중...');
+    const res = await fetch(`${api}/admin/resend-unverified`, { method: 'POST', headers: authHeaders() });
+    const j = await res.json();
+    setMsg(`재발송 완료: 성공 ${j.sent}건, 실패 ${j.failed}건 (총 ${j.total}명)`);
+  };;
 
   if (!isAdmin) return null;
 
@@ -156,7 +164,12 @@ export default function Admin() {
         <div className="p-4 space-y-3">
           {/* Action bar */}
           {tab === 'users' ? (
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={handleResendUnverified}
+                className="text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition-colors">
+                미인증 재발송
+              </button>
               <button
                 onClick={() => csvDownload(`${api}/admin/export/users`, `users_${new Date().toISOString().slice(0,10)}.csv`)}
                 className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition-colors">

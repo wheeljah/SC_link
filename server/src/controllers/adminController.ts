@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { pool } from '../db/pool';
 import { AuthRequest } from '../middleware/auth';
-import { sendMail, getEmailProviderStatus } from '../services/emailService';
+import crypto from 'crypto';
+import { sendMail, getEmailProviderStatus, sendVerificationEmail } from '../services/emailService';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
 
@@ -176,4 +177,34 @@ export async function testEmail(req: AuthRequest, res: Response): Promise<void> 
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ success: false, message: '발송 실패: ' + msg, status });
   }
+}
+
+export async function resendUnverified(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+  const { rows } = await pool.query(
+    `SELECT id, email FROM users WHERE email_verified = false ORDER BY created_at DESC`
+  );
+  if (rows.length === 0) {
+    res.json({ success: true, total: 0, sent: 0, failed: 0, results: [] });
+    return;
+  }
+  let sent = 0, failed = 0;
+  const results: { email: string; status: string }[] = [];
+  for (const user of rows) {
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      await pool.query(
+        `INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+        [user.id, token]
+      );
+      await sendVerificationEmail(user.email, token);
+      sent++;
+      results.push({ email: user.email, status: 'sent' });
+    } catch (e) {
+      failed++;
+      results.push({ email: user.email, status: 'failed: ' + (e instanceof Error ? e.message.slice(0, 80) : String(e)) });
+    }
+    await new Promise(r => setTimeout(r, 300)); // rate limit
+  }
+  res.json({ success: true, total: rows.length, sent, failed, results });
 }

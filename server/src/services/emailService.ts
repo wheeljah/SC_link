@@ -87,12 +87,15 @@ export async function sendMail(opts: {
       subject: opts.subject,
       html: opts.html,
     });
-    if (error) throw new Error('Resend error: ' + error.message);
-    console.log('[Email] Resend sent OK');
-    return null;
+    if (!error) {
+      console.log('[Email] Resend sent OK');
+      return null;
+    }
+    // Resend 실패 → Gmail 폴백 시도
+    console.warn('[Email] Resend failed (' + error.message + '), trying Gmail fallback...');
   }
 
-  // 2순위: Gmail SMTP
+  // 2순위: Gmail SMTP (Resend 없거나 실패 시)
   if (isGmailConfigured && gmailTransporter) {
     console.log('[Email] Sending via Gmail SMTP -> ' + opts.to);
     await gmailTransporter.sendMail({

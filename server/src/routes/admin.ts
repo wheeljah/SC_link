@@ -4,6 +4,7 @@ import {
   getStats, listUsers, listDownloads,
   exportUsers, exportDownloads,
   deleteOldDownloads, deleteUser, testConnectivity, testEmail,
+  resendUnverified,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -18,5 +19,6 @@ router.delete('/downloads/old',  deleteOldDownloads);
 router.delete('/users/:id',      deleteUser);
 router.get('/connectivity',      testConnectivity);
 router.get('/test-email',        testEmail);
+router.post('/resend-unverified', resendUnverified);
 
 export default router;
