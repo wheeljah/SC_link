@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getApiBaseURL } from '../services/api';
+import { getApiBaseURL, initPromise } from '../services/api';
 
 const ADMIN_EMAIL = 'wheeljah@gmail.com';
 
@@ -25,8 +25,9 @@ function authHeaders() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` };
 }
 
-async function csvDownload(url: string, filename: string) {
-  const res = await fetch(url, { headers: authHeaders() });
+async function csvDownload(path: string, filename: string) {
+  await initPromise;
+  const res = await fetch(`${getApiBaseURL()}${path}`, { headers: authHeaders() });
   const blob = await res.blob();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -52,7 +53,6 @@ export default function Admin() {
   const [deleteDays, setDeleteDays] = useState('30');
   const [msg, setMsg] = useState('');
 
-  const api = getApiBaseURL();
   const PER = 50;
 
   useEffect(() => {
@@ -61,26 +61,32 @@ export default function Admin() {
   }, [isLoggedIn, isAdmin, navigate]);
 
   const loadStats = useCallback(async () => {
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/stats`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) setStats(j.data);
-  }, [api]);
+  }, []);
 
   const loadUsers = useCallback(async (page: number) => {
+    await initPromise;
+    const api = getApiBaseURL();
     setLoading(true);
     const res = await fetch(`${api}/admin/users?page=${page}&limit=${PER}`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) { setUsers(j.data); setUserTotal(j.total); }
     setLoading(false);
-  }, [api]);
+  }, []);
 
   const loadDownloads = useCallback(async (page: number) => {
+    await initPromise;
+    const api = getApiBaseURL();
     setLoading(true);
     const res = await fetch(`${api}/admin/downloads?page=${page}&limit=${PER}`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) { setDownloads(j.data); setDlTotal(j.total); }
     setLoading(false);
-  }, [api]);
+  }, []);
 
   useEffect(() => { if (isAdmin) { loadStats(); loadUsers(1); } }, [isAdmin, loadStats, loadUsers]);
   useEffect(() => { if (isAdmin && tab === 'downloads') loadDownloads(dlPage); }, [isAdmin, tab, dlPage, loadDownloads]);
@@ -88,6 +94,8 @@ export default function Admin() {
 
   const handleDeleteUser = async (id: number, email: string) => {
     if (!confirm(`${email} 계정을 삭제하시겠습니까?`)) return;
+    await initPromise;
+    const api = getApiBaseURL();
     await fetch(`${api}/admin/users/${id}`, { method: 'DELETE', headers: authHeaders() });
     setUsers(prev => prev.filter(u => u.id !== id));
     setUserTotal(t => t - 1);
@@ -98,6 +106,8 @@ export default function Admin() {
     const days = parseInt(deleteDays);
     if (!days || days < 1) return;
     if (!confirm(`${days}일 이전 다운로드 기록을 삭제하시겠습니까?`)) return;
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/downloads/old`, {
       method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ days }),
     });
@@ -109,6 +119,8 @@ export default function Admin() {
   const handleResendUnverified = async () => {
     if (!confirm('미인증 사용자 전체에게 인증 메일을 재발송하시겠습니까?')) return;
     setMsg('발송 중...');
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/resend-unverified`, { method: 'POST', headers: authHeaders() });
     const j = await res.json();
     setMsg(`재발송 완료: 성공 ${j.sent}건, 실패 ${j.failed}건 (총 ${j.total}명)`);
@@ -171,7 +183,7 @@ export default function Admin() {
                 미인증 재발송
               </button>
               <button
-                onClick={() => csvDownload(`${api}/admin/export/users`, `users_${new Date().toISOString().slice(0,10)}.csv`)}
+                onClick={() => csvDownload('/admin/export/users', `users_${new Date().toISOString().slice(0,10)}.csv`)}
                 className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition-colors">
                 CSV 내보내기
               </button>
@@ -191,7 +203,7 @@ export default function Admin() {
                 </button>
               </div>
               <button
-                onClick={() => csvDownload(`${api}/admin/export/downloads`, `downloads_${new Date().toISOString().slice(0,10)}.csv`)}
+                onClick={() => csvDownload('/admin/export/downloads', `downloads_${new Date().toISOString().slice(0,10)}.csv`)}
                 className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition-colors">
                 CSV 내보내기
               </button>
