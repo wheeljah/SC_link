@@ -196,7 +196,8 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('DOAB',              'https://doabooks.org',             'oa',  false, 'International', '오픈액세스 도서 디렉터리 — OA 도서 메타데이터·PDF 링크 색인, 80,000+ 타이틀'),
   ('IA Books',          'https://archive.org',              'oa',  false, 'International', 'Internet Archive 텍스트 아카이브 — 공개 도메인·OA 도서 전문, DOI 검색'),
   ('ChemRxiv',          'https://chemrxiv.org',             'oa',  false, 'International', '화학·재료 프리프린트 — Cambridge Open Engage API, key 불필요'),
-  ('Preprints.org',     'https://www.preprints.org',        'oa',  false, 'International', 'MDPI 프리프린트 — DOI 패턴 직접 PDF, key 불필요')
+  ('Preprints.org',     'https://www.preprints.org',        'oa',  false, 'International', 'MDPI 프리프린트 — DOI 패턴 직접 PDF, key 불필요'),
+  ('Springer Nature',   'https://link.springer.com',         'oa',  false, 'International', '260만+ OA 논문·도서를 SpringerLink에서 직접 취득 — Crossref DOI 경유 PDF, 구독 논문은 자동 스킵')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너

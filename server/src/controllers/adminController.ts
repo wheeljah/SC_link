@@ -141,8 +141,6 @@ export async function testConnectivity(req: AuthRequest, res: Response): Promise
     { name: 'osf.io',             url: 'https://api.osf.io/v2/preprints/?filter[doi]=10.31234/osf.io/abc12&page[size]=1' },
     { name: 'datacite.org',       url: 'https://api.datacite.org/dois/10.5281/zenodo.31780' },
     { name: 'figshare.com',       url: 'https://api.figshare.com/v2/articles?page_size=1' },
-    { name: 'chemrxiv.org',       url: 'https://chemrxiv.org/engage/chemrxiv/public-api/v1/categories' },
-    { name: 'preprints.org',      url: 'https://www.preprints.org/manuscript/202101.0001/v1/download' },
   ];
   const axios = (await import('axios')).default;
   const results = await Promise.all(targets.map(async t => {

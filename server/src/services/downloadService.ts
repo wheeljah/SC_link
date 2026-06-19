@@ -1336,6 +1336,61 @@ async function downloadFromIABooks(doi: string): Promise<DownloadResult | null> 
   }
 }
 
+// ─── Springer Nature (link.springer.com OA 논문) ────────────────────────────
+// Crossref로 DOI → Springer 출판사 확인 후 link.springer.com PDF 직접 접속.
+// Springer OA 논문의 PDF URL: https://link.springer.com/content/pdf/10.1007/xxxxx.pdf
+// 구독 논문은 PDF 접근 시 403 반환 → downloadFileFromUrl 내에서 자동 처리됨.
+async function downloadFromSpringer(doi: string): Promise<DownloadResult | null> {
+  try {
+    // 1단계: Crossref로 출판사 확인
+    const crRes = await axios.get(
+      `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
+      { timeout: 10000, headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)', 'Accept': 'application/json' } }
+    );
+    const msg = crRes.data?.message;
+    if (!msg) { console.log(`[springer] Crossref not found: ${doi}`); return null; }
+
+    const publisher = (msg.publisher as string | undefined) ?? '';
+    const normalizedPublisher = publisher.toLowerCase();
+    const isSpringer =
+      normalizedPublisher.includes('springer') ||
+      normalizedPublisher.includes('springernature') ||
+      normalizedPublisher.includes('www.springer');
+
+    if (!isSpringer) { console.log(`[springer] Not Springer publisher (${publisher}): ${doi}`); return null; }
+
+    // 2단계: DOI에서 article ID 추출
+    // 10.1007/xxx, 10.1057/xxx 등 Springer DOI prefix 패턴
+    const doiMatch = doi.match(/^10\.\d{4,5}\/(.+)$/);
+    if (!doiMatch) { console.log(`[springer] Unknown DOI format: ${doi}`); return null; }
+    const articleId = doiMatch[1].replace(/\/$/, ''); // trailing slash 제거
+    const pdfUrl = `https://link.springer.com/content/pdf/10.1007%2F${articleId}.pdf`;
+
+    console.log(`[springer] ${doi} → ${pdfUrl}`);
+
+    // 3단계: PDF 다운로드 시도 (downloadFileFromUrl이 403 시 자동 null 반환)
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'springer_');
+    if (!result) { console.log(`[springer] No accessible PDF (likely subscription): ${doi}`); return null; }
+
+    // 메타데이터 추출
+    const title     = Array.isArray(msg.title) ? msg.title[0] : msg.title;
+    const authors   = (msg.author ?? []).slice(0, 5)
+      .map((a: { given?: string; family?: string }) => [a.given, a.family].filter(Boolean).join(' '))
+      .filter(Boolean).join(', ');
+    const year      = msg.published?.['date-parts']?.[0]?.[0] ?? msg.issued?.['date-parts']?.[0]?.[0];
+    const journal    = Array.isArray(msg['container-title']) ? msg['container-title'][0] : undefined;
+
+    console.log(`[springer] ✅ PDF 확보: ${doi}`);
+    return { ...result, title, authors: authors || undefined, year, journal };
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 404) { console.log(`[springer] Not found: ${doi}`); return null; }
+      console.log(`[springer] ${e.response?.status} ${e.message}`);
+    }
+    return null;
+  }
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(
   doi: string,
@@ -1372,6 +1427,7 @@ export async function downloadPaper(
     ['Preprints.org',    () => downloadFromPreprintsOrg(doi)],
     ['IA Scholar',       () => downloadFromFatcat(doi)],
     ['HAL',              () => downloadFromHAL(doi)],
+    ['Springer Nature',  () => downloadFromSpringer(doi)],
     ['Crossref TDM',     () => downloadFromCrossref(doi)],
     ['INSPIRE-HEP',      () => downloadFromInspireHEP(doi)],
     ['NASA NTRS',        () => downloadFromNASA(doi)],
@@ -1411,4 +1467,4 @@ export async function downloadPaper(
 }
 // OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
 // PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
-// Crossref TDM, INSPIRE-HEP, NASA NTRS, OAPEN, DOAB, IA Books
+// Springer Nature, Crossref TDM, INSPIRE-HEP, NASA NTRS, OAPEN, DOAB, IA Books
