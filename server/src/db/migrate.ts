@@ -197,7 +197,10 @@ INSERT INTO download_servers (name, url, type, requires_login, location, notes) 
   ('IA Books',          'https://archive.org',              'oa',  false, 'International', 'Internet Archive 텍스트 아카이브 — 공개 도메인·OA 도서 전문, DOI 검색'),
   ('ChemRxiv',          'https://chemrxiv.org',             'oa',  false, 'International', '화학·재료 프리프린트 — Cambridge Open Engage API, key 불필요'),
   ('Preprints.org',     'https://www.preprints.org',        'oa',  false, 'International', 'MDPI 프리프린트 — DOI 패턴 직접 PDF, key 불필요'),
-  ('Springer Nature',   'https://link.springer.com',         'oa',  false, 'International', '260만+ OA 논문·도서를 SpringerLink에서 직접 취득 — Crossref DOI 경유 PDF, 구독 논문은 자동 스킵')
+  ('Springer Nature',   'https://link.springer.com',         'oa',  false, 'International', '260만+ OA 논문·도서를 SpringerLink에서 직접 취득 — Crossref DOI 경유 PDF, 구독 논문은 자동 스킵'),
+  ('PLOS',             'https://journals.plos.org',          'oa',  false, 'International', 'Public Library of Science — PLOS ONE/Biology/Medicine 등 완전 OA, DOI 직접 PDF URL'),
+  ('Science/AAAS',     'https://www.science.org',            'oa',  false, 'International', 'Science, Science Signaling 등 AAAS 시리즈 — OA 아티클 PDF 직접 다운로드, 구독 아티클은 자동 스킵'),
+  ('Cell Press',       'https://www.cell.com',               'oa',  false, 'International', 'Cell, Neuron, Immunity 등 Cell Press 시리즈 — OA 버전 PDF, 구독 아티클은 자동 스킵')
 ON CONFLICT DO NOTHING;
 
 -- 광고 배너

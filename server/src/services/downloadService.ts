@@ -1391,6 +1391,65 @@ async function downloadFromSpringer(doi: string): Promise<DownloadResult | null>
   }
 }
 
+// ─── PLOS (Public Library of Science — 10.1371/*) ────────────────────────────
+// 완전한 OA 출판사: PLOS ONE, PLOS Biology, PLOS Medicine, PLOS NTD 등.
+// DOI 패턴에서 직접 PDF URL 구성 — key 불필요.
+async function downloadFromPLOS(doi: string): Promise<DownloadResult | null> {
+  // 10.1371/journal.pone.XXXXXXXX, 10.1371/journal.pbio.XXXXXXXX 등
+  const m = doi.match(/^10\.1371\/(journal\.[a-z]+)\.(.+)$/i);
+  if (!m) { console.log(`[plos] Not PLOS DOI: ${doi}`); return null; }
+  const journalSlug = m[1]; // journal.pone, journal.pbio 등
+  const articleId   = m[2]; // e.g. 10.1371/journal.pone.0156823 → article?id=...
+  const pdfUrl = `https://journals.plos.org/${journalSlug}/article/file?id=${encodeURIComponent(doi)}&type=printable`;
+  console.log(`[plos] ${doi} → ${pdfUrl}`);
+  try {
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'plos_');
+    if (result) { console.log(`[plos] ✅ PDF 확보: ${doi}`); return result; }
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[plos] ${e.response?.status} ${e.message}`);
+  }
+  return null;
+}
+
+// ─── Science / AAAS (10.1126/*) ───────────────────────────────────────────────
+// Science, Science Signaling, Science Translational Medicine 등.
+// OA 아티클: https://www.science.org/doi/pdf/10.1126/xxxxx 로 PDF 직접 다운로드.
+// 구독 아티클은 403 반환 → downloadFileFromUrl이 자동 null 처리.
+async function downloadFromScience(doi: string): Promise<DownloadResult | null> {
+  const doiMatch = doi.match(/^10\.1126\/(.+)$/i);
+  if (!doiMatch) { console.log(`[science] Not AAAS DOI: ${doi}`); return null; }
+  const pdfUrl = `https://www.science.org/doi/pdf/${doi}`;
+  console.log(`[science] ${doi} → ${pdfUrl}`);
+  try {
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'science_');
+    if (result) { console.log(`[science] ✅ PDF 확보: ${doi}`); return result; }
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[science] ${e.response?.status} ${e.message}`);
+  }
+  return null;
+}
+
+// ─── Cell Press / Elsevier (10.1016/*) ────────────────────────────────────────
+// Cell, Neuron, Immunity, Molecular Cell 등 Cell Press 시리즈.
+// OA 버전: https://www.cell.com/action/showPdf?pii=S0092-XXXXX(X)XXXXX-X
+// DOI에서 pi id 추출: 10.1016/S0092-8674(00)81614-4 → pii=S0092-8674(00)81614-4
+// 구독 아티클은 403 반환.
+async function downloadFromCell(doi: string): Promise<DownloadResult | null> {
+  // 10.1016/SXXXX-XXXX(XX)XXXXX-X 패턴에서 article ID 추출
+  const m = doi.match(/^10\.1016\/(S\d{4}-\d{4}\(\d{2}\)\d{3,6}-[A-Z0-9])$/i);
+  if (!m) { console.log(`[cell] Not Cell Press DOI: ${doi}`); return null; }
+  const pii = m[1];
+  const pdfUrl = `https://www.cell.com/action/showPdf?pii=${encodeURIComponent(pii)}`;
+  console.log(`[cell] ${doi} → ${pdfUrl}`);
+  try {
+    const result = await downloadFileFromUrl(pdfUrl, doi, 'cell_');
+    if (result) { console.log(`[cell] ✅ PDF 확보: ${doi}`); return result; }
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[cell] ${e.response?.status} ${e.message}`);
+  }
+  return null;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(
   doi: string,
@@ -1434,6 +1493,9 @@ export async function downloadPaper(
     ['OAPEN',            () => downloadFromOAPEN(doi)],
     ['DOAB',             () => downloadFromDOAB(doi)],
     ['IA Books',         () => downloadFromIABooks(doi)],
+    ['PLOS',             () => downloadFromPLOS(doi)],
+    ['Science/AAAS',     () => downloadFromScience(doi)],
+    ['Cell Press',       () => downloadFromCell(doi)],
   ];
 
   for (const [name, fn] of oaSources) {
@@ -1467,4 +1529,5 @@ export async function downloadPaper(
 }
 // OA sources: OpenAlex, Unpaywall, OA.mg, OpenAIRE, Semantic Scholar, Europe PMC,
 // PMC OA, CORE, DOAJ, arXiv, Zenodo, DataCite, bioRxiv/medRxiv, OSF, IA Scholar, HAL,
-// Springer Nature, Crossref TDM, INSPIRE-HEP, NASA NTRS, OAPEN, DOAB, IA Books
+// Springer Nature, Crossref TDM, INSPIRE-HEP, NASA NTRS, OAPEN, DOAB, IA Books,
+// PLOS, Science/AAAS, Cell Press
