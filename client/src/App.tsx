@@ -17,6 +17,8 @@ import History from './pages/History';
 import BugReport from './pages/BugReport';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
+import CitationNetworkPage from './pages/CitationNetworkPage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuth();
@@ -56,6 +58,8 @@ function Layout() {
           <Route path="/profile" element={
             <PrivateRoute><Profile /></PrivateRoute>
           } />
+          <Route path="/network" element={<CitationNetworkPage />} />
+          <Route path="/network/:doi" element={<CitationNetworkPage />} />
         </Routes>
       </main>
       <BottomAdBanner />
@@ -64,9 +68,21 @@ function Layout() {
 }
 
 export default function App() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        refetchOnWindowFocus: false,
+        retry: 1,
+      },
+    },
+  });
+
   return (
-    <AuthProvider>
-      <Layout />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Layout />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

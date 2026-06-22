@@ -229,7 +229,26 @@ export default function Home() {
                 type="text"
                 value={input}
                 onChange={e => setInput(e.target.value)}
+                onPaste={e => {
+                  const text = e.clipboardData.getData('text');
+                  if (text) {
+                    const el = e.target as HTMLInputElement;
+                    const start = el.selectionStart ?? input.length;
+                    const end = el.selectionEnd ?? input.length;
+                    setInput(prev => prev.slice(0, start) + text + prev.slice(end));
+                    setTimeout(() => {
+                      (e.target as HTMLInputElement).setSelectionRange(
+                        start + text.length, start + text.length
+                      );
+                    }, 0);
+                  }
+                  e.preventDefault();
+                }}
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck="false"
                 placeholder="DOI, PMID, arXiv ID, 논문 제목, 또는 저널 URL 입력..."
+                style={{ WebkitUserSelect: 'text', userSelect: 'text', touchAction: 'manipulation' }}
                 className="w-full border border-slate-300 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
               />
             </div>
@@ -354,7 +373,15 @@ export default function Home() {
                   <IconCheck className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-green-800">검색 완료!</p>
-                    <p className="text-xs text-green-600 mt-1">DOI: {result.doi} &middot; {(result.fileSize / 1024 / 1024).toFixed(1)} MB</p>
+                    <p className="text-xs text-green-600 mt-1">
+                      DOI: {result.doi} &middot; {(result.fileSize / 1024 / 1024).toFixed(1)} MB
+                    </p>
+                    <Link
+                      to={`/network/${encodeURIComponent(result.doi)}`}
+                      className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                    >
+                      🔗 이 논문의 인용 네트워크 보기
+                    </Link>
                   </div>
                 </div>
                 <a

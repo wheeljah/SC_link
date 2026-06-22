@@ -160,6 +160,24 @@ CREATE INDEX IF NOT EXISTS idx_community_status ON community_requests(status);
 CREATE INDEX IF NOT EXISTS idx_community_user ON community_requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_servers_status ON download_servers(status);
 
+-- 인용 네트워크 캐시 (OpenAlex 기반)
+CREATE TABLE IF NOT EXISTS citation_cache (
+  id SERIAL PRIMARY KEY,
+  cache_key VARCHAR(500) UNIQUE NOT NULL,
+  seed_doi VARCHAR(255) NOT NULL,
+  depth SMALLINT NOT NULL CHECK (depth BETWEEN 1 AND 2),
+  direction VARCHAR(20) NOT NULL CHECK (direction IN ('both', 'cites', 'cited_by')),
+  max_nodes SMALLINT NOT NULL,
+  graph_data JSONB NOT NULL,
+  node_count INTEGER NOT NULL,
+  edge_count INTEGER NOT NULL,
+  build_time_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_citation_cache_seed ON citation_cache(seed_doi);
+CREATE INDEX IF NOT EXISTS idx_citation_cache_expires ON citation_cache(expires_at);
+
 -- 에러 보고
 CREATE TABLE IF NOT EXISTS bug_reports (
   id          SERIAL PRIMARY KEY,
