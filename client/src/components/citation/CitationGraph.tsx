@@ -2,7 +2,7 @@
 //
 // d3-force 기반 인용 네트워크 시각화.
 //
-// • 시드(검정 테두리) + OA 가능(초록) + Partial(주황) + Paid(빨강)
+// • 시드(검정 테두리) + OA 가능(초록) + Partial(주황) + Paid(회색)
 // • 사용자가 다운로드한 이력이 있는 노드는 보라색 테두리
 // • 마우스 호버 시 인접 노드만 강조, 나머지 흐리게
 // • 드래그로 위치 고정, 휠로 줌, 더블클릭으로 줌 리셋
@@ -95,7 +95,8 @@ export default function CitationGraph({ data, onNodeClick, highlightSeed = true 
     svg.call(zoomBehavior);
     zoomBehaviorRef.current = zoomBehavior;
     svg.on('dblclick.zoom', () => {
-      svg.transition().duration(500).call(zoomBehavior.transform, zoomIdentity);
+      // 즉시 줌 리셋 (부드러운 전환은 d3-transition 타입 추가 필요 — 후속 작업)
+      svg.call(zoomBehavior.transform, zoomIdentity);
     });
 
     // ─── 3) 컨테이너 ────────────────────────────────────

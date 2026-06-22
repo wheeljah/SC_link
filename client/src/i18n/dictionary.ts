@@ -297,7 +297,6 @@ export const EN: Record<string, string> = {
   'OpenAlex에서 보기 ↗': 'View on OpenAlex ↗',
   '깊이': 'Depth',
   'OA만 표시': 'OA only',
-  '새로고침': 'Refresh',
   '새로고침 중': 'Refreshing',
   '이 네트워크의 ': '',
   '%는 지금 바로 다운로드할 수 있어요': '% of this network is downloadable right now',
