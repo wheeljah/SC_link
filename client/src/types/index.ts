@@ -5,6 +5,7 @@ export interface User {
   emailVerified: boolean;
   tier: 'free' | 'premium' | 'vip';
   downloadCount: number;
+  isAdmin?: boolean;
 }
 
 export interface DownloadServer {

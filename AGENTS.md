@@ -42,12 +42,14 @@ ScholarLink는 DOI / PMID / arXiv ID / 저널 URL 만으로 **오픈액세스 �
 | 스케줄링 | node-cron |
 
 ### 인프라
-| 서비스 | 용도 | URL |
-|---|---|---|
-| Render | 백엔드 API 서버 | scholarlink-api.onrender.com |
-| Neon | PostgreSQL DB | scholarlink (asia-pacific) |
-| GitHub Pages | 프론트엔드 | wheeljah.github.io/SC_link |
-| GitHub Actions | 슬립 방지 (keep-alive) | 10분마다 Render 핑 |
+| 서비스 | 용도 | 플랜 | URL |
+|---|---|---|---|
+| Render | 백엔드 API 서버 | **$5/mo 유료 (24/7, 슬립 없음)** | scholarlink-api.onrender.com |
+| Neon | PostgreSQL DB | Free | scholarlink (asia-pacific) |
+| GitHub Pages | 프론트엔드 | Free | wheeljah.github.io/SC_link |
+| GitHub Actions | keep-alive ping | Free | `*/5` cron + 4분 간격 이중 핑 (안전망) |
+
+**참고**: `render.yaml`은 `plan: free`로 선언되어 있지만, 실제 대시보드에서 $5 유료 플랜으로 업그레이드됨 (2026-06-25 기준). render.yaml은 Blueprint 초기 설정용이라 dashboard 변경을 안 따라감. 유료 플랜이라 슬립이 없지만 keep-alive cron은 비상용으로 유지 중.
 
 ## 주요 기능
 
@@ -88,14 +90,25 @@ ScholarLink는 DOI / PMID / arXiv ID / 저널 URL 만으로 **오픈액세스 �
 - 토큰 기반 인증 (JWT Bearer)
 - 다운로드 횟수 추적 (`download_count`)
 - 티어 시스템 (tier)
-- 지역 정보 기록 (`region`, `region_ip`)
+- 지역 정보 기록 (`region`, `region_ip`, `country_code`)
 - Remember-me 토큰
+- **외국인 가입 허용** (2026-06-28 추가): 회원가입 시 국가 드롭다운 노출. KR 선택 시에만 한국 행정구역 드롭다운 표시
+  - IP 감지: `detectGeoFromIp` (ipapi.co) → `{ countryCode, region }`
+  - 한국 사용자: `country_code='KR'` + `region` 필수
+  - 그 외 국가: `country_code='XX'` + `region=NULL` (행정구역 입력 불요)
+  - 마이그레이션: `users.country_code VARCHAR(2)` + `idx_users_country` 인덱스
 
 ### 3. 커뮤니티
 - 자유게시판 (Community)
 - 버그 리포트 (BugReport)
 - 질문·답변
 - 회원별 게시글 관리
+- **커뮤니티 답변 이메일 알림** (2026-06-28 추가): 다른 사용자가 내 요청에 답변/파일을 첨부하면 fire-and-forget로 이메일 발송
+  - 트리거: `communityController.respondToRequest` — INSERT 직후
+  - 발송 조건: 자기 답변 X, 요청자 이메일 존재, `users.notify_community_response = TRUE`
+  - 비동기 처리 — 이메일 실패가 API 응답에 영향 없음 (catch + log)
+  - 새 컬럼: `users.notify_community_response BOOLEAN DEFAULT TRUE` (마이그레이션 자동)
+  - 이메일 템플릿: `emailService.sendCommunityResponseNotification` — responder 닉네임, 요청 제목, 메시지 미리보기(500자 제한), 답변 확인 버튼
 
 ### 4. 다운로드 이력
 - 로그인 유저별 다운로드 이력 (History)

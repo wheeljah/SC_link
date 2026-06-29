@@ -3,7 +3,7 @@ import bidvibeLogo from '../../assets/bidvibe-logo.svg';
 import { getLang } from '../../i18n/translate';
 
 const CTA_U    = 'https://ai-traffic.kr';
-const MSG_KO   = '엑셀로 공급사 그만 찾기';
+const MSG_KO   = '연구자 비용 0원, 엑셀로 공급사 그만 찾기';
 const MSG_EN   = 'Researchers private. Quotes public. Suppliers confidential.';
 const CTA_KO   = '지금 등록 →';
 const CTA_EN   = 'Sign up now →';

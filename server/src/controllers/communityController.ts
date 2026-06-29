@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../db/pool';
 import { AuthRequest } from '../middleware/auth';
+import { sendCommunityResponseNotification } from '../services/emailService';
 
 export async function listRequests(req: Request, res: Response): Promise<void> {
   const status = req.query.status as string;
@@ -67,8 +68,17 @@ export async function respondToRequest(req: AuthRequest, res: Response): Promise
   const { message } = req.body;
   const file = req.file;
 
-  const { rows: reqRows } = await pool.query(`SELECT id FROM community_requests WHERE id = $1`, [requestId]);
+  // 요청자 정보 + 알림 수신 설정까지 함께 조회 (이메일 알림용)
+  const { rows: reqRows } = await pool.query(
+    `SELECT cr.id, cr.title, cr.user_id as requester_id, u.email as requester_email,
+            u.nickname as requester_nickname, COALESCE(u.notify_community_response, TRUE) as notify_enabled
+     FROM community_requests cr
+     JOIN users u ON u.id = cr.user_id
+     WHERE cr.id = $1`,
+    [requestId]
+  );
   if (!reqRows[0]) { res.status(404).json({ success: false, message: '요청을 찾을 수 없습니다.' }); return; }
+  const reqRow = reqRows[0];
 
   const fileUrl = file ? `/uploads/${file.filename}` : null;
   const fileSize = file ? file.size : null;
@@ -83,6 +93,28 @@ export async function respondToRequest(req: AuthRequest, res: Response): Promise
       `UPDATE community_requests SET status = 'fulfilled', fulfilled_by = $1, fulfilled_at = NOW() WHERE id = $2 AND status = 'open'`,
       [req.userId, requestId]
     );
+  }
+
+  // 응답자에게 이메일 알림 (비동기 fire-and-forget — 응답 latency 영향 없음)
+  // 조건: 자기 자신 응답 X, 요청자 이메일 존재, 알림 수신 동의
+  const isSelfResponse = reqRow.requester_id === req.userId;
+  if (!isSelfResponse && reqRow.requester_email && reqRow.notify_enabled) {
+    const { rows: userRows } = await pool.query(
+      `SELECT nickname FROM users WHERE id = $1`,
+      [req.userId]
+    );
+    const responderNickname = userRows[0]?.nickname || '익명';
+    sendCommunityResponseNotification({
+      to: reqRow.requester_email,
+      requestTitle: reqRow.title,
+      requestId,
+      responderNickname,
+      hasMessage: !!message,
+      hasFile: !!file,
+      messagePreview: message || undefined,
+    }).catch((err) => {
+      console.error('[Community] Response notification email failed:', err);
+    });
   }
 
   res.status(201).json({ success: true, message: '응답이 등록되었습니다.' });

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PaperRequest } from '../types';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const STATUS_ICON: Record<string, string> = {
   pending: '⏳', completed: '✅', failed: '❌',
@@ -12,17 +13,44 @@ function formatBytes(bytes: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+interface StatsSummary {
+  searches_total: number;
+  completed: number;
+  failed: number;
+  ratio: number;
+}
+
 export default function History() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.isAdmin;
+
   const [history, setHistory] = useState<PaperRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [summary, setSummary] = useState<StatsSummary | null>(null);
 
   useEffect(() => {
     api.get(`/papers/history?page=${page}&limit=20`)
       .then(r => { setHistory(r.data.data); setTotal(r.data.total); })
       .finally(() => setLoading(false));
   }, [page]);
+
+  // Admin만 통계 요약 조회 (백엔드도 admin-only 가드)
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get('/auth/me/stats')
+      .then(r => {
+        const d = r.data.data;
+        setSummary({
+          searches_total: d.counters.searches.total,
+          completed:      d.success_rate.completed,
+          failed:         d.success_rate.failed,
+          ratio:          d.success_rate.ratio,
+        });
+      })
+      .catch(() => { /* 무시 */ });
+  }, [isAdmin]);
 
   if (loading) return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -35,7 +63,27 @@ export default function History() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-5">
       <h1 className="text-2xl font-bold text-slate-900">📁 다운로드 이력</h1>
-      <p className="text-sm text-slate-500">총 {total}건</p>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+        <span>총 <strong className="text-slate-700">{total.toLocaleString()}</strong>건</span>
+        {summary && (
+          <>
+            <span className="text-slate-300">·</span>
+            <span className="text-emerald-600">
+              성공 {summary.completed.toLocaleString()}
+            </span>
+            {summary.failed > 0 && (
+              <span className="text-red-500">
+                실패 {summary.failed.toLocaleString()}
+              </span>
+            )}
+            {summary.searches_total > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                성공률 {Math.round(summary.ratio * 100)}%
+              </span>
+            )}
+          </>
+        )}
+      </div>
 
       {history.length === 0 ? (
         <div className="text-center py-16 text-slate-400">

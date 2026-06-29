@@ -2,26 +2,57 @@ import { useEffect } from 'react';
 
 export default function CopyProtection() {
   useEffect(() => {
-    // 우클릭 방지
+    // 우클릭 방지 — INPUT/TEXTAREA/링크는 허용
     const preventContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    // 텍스트 선택 방지 (노드 선택 제외)
-    const preventSelect = (e: Event) => {
       const target = e.target as HTMLElement;
-      // 버튼, 입력창, 링크는 선택 허용
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         target.tagName === 'BUTTON' ||
         target.tagName === 'A' ||
-        target.closest('input') ||
-        target.closest('textarea') ||
-        target.closest('button') ||
-        target.closest('a')
+        target.closest?.('input') ||
+        target.closest?.('textarea') ||
+        target.closest?.('button') ||
+        target.closest?.('a')
       ) return;
       e.preventDefault();
+    };
+
+    // 텍스트 선택 방지 (노드 선택 제외)
+    const allowSelect = (el: HTMLElement) => {
+      return (
+        el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.tagName === 'BUTTON' ||
+        el.tagName === 'A' ||
+        el.closest?.('[contenteditable="true"]') ||
+        el.closest?.('.allow-select')
+      );
+    };
+
+    const preventSelect = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (allowSelect(target)) return;
+      e.preventDefault();
+    };
+
+    // 모바일 long-press menu 방지 — touch 이벤트 레벨에서 INPUT/TEXTAREA 제외
+    const preventTouchMenu = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'BUTTON' ||
+        target.tagName === 'A' ||
+        target.closest?.('input') ||
+        target.closest?.('textarea') ||
+        target.closest?.('button') ||
+        target.closest?.('a') ||
+        target.closest?.('.allow-select')
+      ) return;
+      // 모바일에서 커서 메뉴 숨기기
+      const selection = window.getSelection();
+      if (selection?.toString()) selection.removeAllRanges();
     };
 
     // 키보드 복사 단축키 방지
@@ -53,6 +84,7 @@ export default function CopyProtection() {
     document.addEventListener('contextmenu', preventContextMenu);
     document.addEventListener('selectstart', preventSelect);
     document.addEventListener('keydown', preventCopy);
+    document.addEventListener('touchstart', preventTouchMenu, { passive: true });
     checkDevTools();
 
     // 드래그 방지 (이미지 등)
@@ -67,6 +99,7 @@ export default function CopyProtection() {
       document.removeEventListener('selectstart', preventSelect);
       document.removeEventListener('keydown', preventCopy);
       document.removeEventListener('dragstart', preventDrag);
+      document.removeEventListener('touchstart', preventTouchMenu);
     };
   }, []);
 

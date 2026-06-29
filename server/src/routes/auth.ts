@@ -6,6 +6,7 @@ import {
   login, forgotPassword, resetPassword, logout, getMe, deleteMe,
   devGetVerifyLink
 } from '../controllers/authController';
+import { getMyStats } from '../controllers/userStatsController';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', authLimiter, resetPassword);
 router.post('/logout', requireAuth, logout);
 router.get('/me', requireAuth, getMe);
+router.get('/me/stats', requireAuth, getMyStats);
 router.delete('/me', requireAuth, deleteMe);
 router.get('/dev-verify-link', devGetVerifyLink); // 개발 전용
 

@@ -5,6 +5,8 @@ import { pool } from '../db/pool';
 import { sendVerificationEmail, sendPasswordResetEmail, getEmailProviderStatus } from '../services/emailService';
 import { signToken, AuthRequest } from '../middleware/auth';
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
+
 // ── 행정구역 코드 매핑 (ipapi.co region 문자열 → 내부 코드) ──────────────
 const REGION_MAP: Record<string, string> = {
   seoul: 'seoul', busan: 'busan', daegu: 'daegu', incheon: 'incheon',
@@ -30,7 +32,14 @@ function mapRegion(raw: string): string | null {
   return null;
 }
 
-async function detectRegionFromIp(ip: string): Promise<string | null> {
+type GeoLookup = { countryCode: string; region: string | null };
+
+/**
+ * IP 기반 국가 + (한국 한정) 행정구역 감지
+ * - 국가 코드: 전 세계 (ipapi.co 응답의 `country` 필드 = ISO alpha-2)
+ * - 행정구역: KR일 때만 mapRegion()으로 매핑, 그 외 국가면 null
+ */
+async function detectGeoFromIp(ip: string): Promise<GeoLookup | null> {
   try {
     const cleanIp = ip.replace(/^::ffff:/, ''); // IPv4-mapped IPv6 제거
     if (cleanIp === '127.0.0.1' || cleanIp === '::1') return null;
@@ -39,12 +48,20 @@ async function detectRegionFromIp(ip: string): Promise<string | null> {
     const res = await fetch(`https://ipapi.co/${cleanIp}/json/`);
     clearTimeout(tid);
     if (!res.ok) return null;
-    const data = await res.json() as { region?: string; country?: string };
-    if (data.country !== 'KR') return null;
-    return mapRegion(data.region || '');
+    const data = await res.json() as { country?: string; region?: string };
+    const countryCode = (data.country || '').toUpperCase();
+    if (!countryCode || countryCode.length !== 2) return null;
+    const region = countryCode === 'KR' ? mapRegion(data.region || '') : null;
+    return { countryCode, region };
   } catch {
     return null;
   }
+}
+
+/** 하위 호환: detectRegionFromIp 사용처가 있으면 그 동작 유지 */
+async function detectRegionFromIp(ip: string): Promise<string | null> {
+  const geo = await detectGeoFromIp(ip);
+  return geo?.region ?? null;
 }
 
 /** 이메일 발송에 타임아웃 적용 (15초 초과 시 오류 대신 경고만 남김) */
@@ -56,7 +73,7 @@ async function sendVerificationEmailWithTimeout(email: string, token: string): P
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, nickname, region } = req.body;
+  const { email, password, nickname, region, countryCode } = req.body;
 
   if (!email || !password) {
     res.status(400).json({ success: false, message: '이메일과 비밀번호를 입력해주세요.' });
@@ -65,10 +82,24 @@ export async function register(req: Request, res: Response): Promise<void> {
   const VALID_REGIONS = ['seoul','busan','daegu','incheon','gwangju','daejeon','ulsan',
     'sejong','gyeonggi','gangwon','chungbuk','chungnam','jeonbuk','jeonnam',
     'gyeongbuk','gyeongnam','jeju'];
-  if (!region || !VALID_REGIONS.includes(region)) {
-    res.status(400).json({ success: false, message: '행정구역을 선택해주세요.' });
+
+  // countryCode 정규화: 'KR', 'US' 등 2글자. 없거나 형식 안 맞으면 null (외국인 가입 허용)
+  const normalizedCountry: string | null = (typeof countryCode === 'string')
+    ? countryCode.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || null
+    : null;
+
+  // region 검증: 제공된 경우에만 enum 검증. KR이 아닌데 region 있으면 거부.
+  if (region && !VALID_REGIONS.includes(region)) {
+    res.status(400).json({ success: false, message: '올바른 행정구역을 선택해주세요.' });
     return;
   }
+  if (region && normalizedCountry && normalizedCountry !== 'KR') {
+    res.status(400).json({ success: false, message: '행정구역은 한국(KR) 사용자에 한정됩니다.' });
+    return;
+  }
+  // 하위 호환: countryCode 없이 region만 보내는 옛 클라이언트는 KR로 간주
+  const finalCountry = normalizedCountry || (region ? 'KR' : '');
+
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     res.status(400).json({ success: false, message: '올바른 이메일 형식이 아닙니다.' });
     return;
@@ -85,12 +116,15 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const hash = await bcrypt.hash(password, 12);
-  // IP 기반 행정구역 감지 (비동기, 실패해도 가입 계속)
-  const regionIp = await detectRegionFromIp(req.ip || '').catch(() => null);
+  // IP 기반 국가/행정구역 감지 (실패해도 가입 계속)
+  const geo = await detectGeoFromIp(req.ip || '').catch(() => null);
+  // 클라이언트가 보낸 country/region 우선, 없으면 IP 감지값으로 fallback
+  const finalCountryCode = finalCountry || geo?.countryCode || null;
+  const regionIp = region ? null : (geo?.region || null); // 사용자가 명시 선택하면 IP 추정값 무시
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, nickname, region, region_ip)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [email.toLowerCase(), hash, nickname || null, region, regionIp]
+    `INSERT INTO users (email, password_hash, nickname, region, region_ip, country_code)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [email.toLowerCase(), hash, nickname || null, region || null, regionIp, finalCountryCode]
   );
   const userId = rows[0].id;
 
@@ -204,7 +238,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   const { rows } = await pool.query(
-    `SELECT id, email, password_hash, nickname, email_verified, tier, download_count, region FROM users WHERE email = $1`,
+    `SELECT id, email, password_hash, nickname, email_verified, tier, download_count, region, country_code FROM users WHERE email = $1`,
     [email.toLowerCase()]
   );
   const user = rows[0];
@@ -220,11 +254,15 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [user.id]);
 
-  // 기존 가입자 중 region 없는 경우 → 로그인 시 IP 기반 자동 저장 (non-blocking)
-  if (!user.region) {
-    detectRegionFromIp(req.ip || '').then(regionIp => {
-      if (regionIp) {
-        pool.query(`UPDATE users SET region_ip = $1 WHERE id = $2 AND region IS NULL`, [regionIp, user.id]).catch(() => {});
+  // 기존 가입자 중 region/country 누락 시 → 로그인 시 IP 기반 자동 보강 (non-blocking)
+  if (!user.region || !user.country_code) {
+    detectGeoFromIp(req.ip || '').then(geo => {
+      if (!geo) return;
+      if (geo.region && !user.region) {
+        pool.query(`UPDATE users SET region_ip = $1 WHERE id = $2 AND region IS NULL`, [geo.region, user.id]).catch(() => {});
+      }
+      if (geo.countryCode && !user.country_code) {
+        pool.query(`UPDATE users SET country_code = $1 WHERE id = $2 AND country_code IS NULL`, [geo.countryCode, user.id]).catch(() => {});
       }
     }).catch(() => {});
   }
@@ -235,7 +273,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     success: true,
     data: {
       token,
-      user: { id: user.id, email: user.email, nickname: user.nickname, emailVerified: true, tier: user.tier, downloadCount: user.download_count },
+      user: { id: user.id, email: user.email, nickname: user.nickname, emailVerified: true, tier: user.tier, downloadCount: user.download_count, isAdmin: user.email === ADMIN_EMAIL },
     },
   });
 }
@@ -306,7 +344,10 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
     [req.userId]
   );
   if (!rows[0]) { res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' }); return; }
-  res.json({ success: true, data: rows[0] });
+  res.json({
+    success: true,
+    data: { ...rows[0], is_admin: rows[0].email === ADMIN_EMAIL },
+  });
 }
 
 /**

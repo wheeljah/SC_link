@@ -50,6 +50,15 @@ async function getEtherealTransporter(): Promise<nodemailer.Transporter> {
   return etherealTransporter;
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const emailHtml = (title: string, body: string, btnText: string, btnUrl: string) => `
 <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff;border-radius:12px;">
   <h2 style="color:#0f172a;margin-bottom:8px;">ScholarLink</h2>
@@ -153,6 +162,43 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
       '비밀번호 재설정하기',
       link,
     ),
+  });
+}
+
+export async function sendCommunityResponseNotification(opts: {
+  to: string;
+  requestTitle: string;
+  requestId: number;
+  responderNickname: string;
+  hasMessage: boolean;
+  hasFile: boolean;
+  messagePreview?: string;
+}): Promise<string | null> {
+  const link = `${APP_URL}/community/${opts.requestId}`;
+
+  let activityDesc: string;
+  if (opts.hasFile && opts.hasMessage) {
+    activityDesc = '답변과 파일을 첨부했습니다.';
+  } else if (opts.hasFile) {
+    activityDesc = '파일을 첨부했습니다.';
+  } else {
+    activityDesc = '답변을 남겼습니다.';
+  }
+
+  const previewHtml = opts.messagePreview && opts.messagePreview.trim()
+    ? `<div style="background:#f1f5f9;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;margin:16px 0;color:#475569;font-style:italic;white-space:pre-wrap;">${escapeHtml(opts.messagePreview.slice(0, 500))}</div>`
+    : '';
+
+  const body = `
+    <strong>${escapeHtml(opts.responderNickname)}</strong>님이 회원님이 등록한 요청
+    "<strong>${escapeHtml(opts.requestTitle)}</strong>"에 ${activityDesc}
+    ${previewHtml}
+  `;
+
+  return sendMail({
+    to: opts.to,
+    subject: `[ScholarLink] "${opts.requestTitle}"에 새 답변이 등록되었습니다`,
+    html: emailHtml('커뮤니티 답변 알림', body, '답변 확인하기', link),
   });
 }
 

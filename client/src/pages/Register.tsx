@@ -43,11 +43,61 @@ function mapIpRegion(raw: string): string {
   return '';
 }
 
+// 가입 가능한 국가 — ISO 3166-1 alpha-2 + 영문 표기 (학술 서비스라 일반 연구국가 중심)
+const COUNTRIES: { code: string; name: string }[] = [
+  { code: 'KR', name: 'South Korea (대한민국)' },
+  { code: 'US', name: 'United States' },
+  { code: 'JP', name: 'Japan (日本)' },
+  { code: 'CN', name: 'China (中国)' },
+  { code: 'TW', name: 'Taiwan' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'IN', name: 'India' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'VN', name: 'Vietnam' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'AT', name: 'Austria' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'PT', name: 'Portugal' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'FI', name: 'Finland' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'PL', name: 'Poland' },
+  { code: 'CZ', name: 'Czechia' },
+  { code: 'RU', name: 'Russia' },
+  { code: 'TR', name: 'Turkey' },
+  { code: 'IL', name: 'Israel' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'AR', name: 'Argentina' },
+  { code: 'CL', name: 'Chile' },
+  { code: 'CO', name: 'Colombia' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'NZ', name: 'New Zealand' },
+];
+
 export default function Register() {
   const [form, setForm] = useState({
-    email: '', password: '', confirmPassword: '', nickname: '', region: '',
+    email: '', password: '', confirmPassword: '', nickname: '',
+    countryCode: '', region: '',
   });
-  const [regionDetecting, setRegionDetecting] = useState(true);
+  const [geoDetecting, setGeoDetecting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -55,7 +105,7 @@ export default function Register() {
   const [serverMsg, setServerMsg] = useState('');
   const [verifyLink, setVerifyLink] = useState('');
 
-  // IP 기반 행정구역 자동 감지
+  // IP 기반 국가 + (KR이면) 행정구역 자동 감지
   useEffect(() => {
     (async () => {
       try {
@@ -64,18 +114,30 @@ export default function Register() {
         const res = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
         clearTimeout(tid);
         const data = await res.json() as { region?: string; country?: string };
-        if (data.country === 'KR') {
-          const detected = mapIpRegion(data.region || '');
-          if (detected) setForm(f => ({ ...f, region: detected }));
+        const country = (data.country || '').toUpperCase();
+        if (country && country.length === 2) {
+          const patch: Partial<typeof form> = { countryCode: country };
+          if (country === 'KR') {
+            const detected = mapIpRegion(data.region || '');
+            if (detected) patch.region = detected;
+          }
+          setForm(f => ({ ...f, ...patch }));
         }
       } catch { /* 실패 시 사용자가 직접 선택 */ }
-      finally { setRegionDetecting(false); }
+      finally { setGeoDetecting(false); }
     })();
   }, []);
 
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm(f => ({ ...f, [k]: e.target.value }));
+      setForm(f => {
+        const next = { ...f, [k]: e.target.value };
+        // 국가가 KR이 아닌 걸로 바뀌면 region 초기화
+        if (k === 'countryCode' && e.target.value !== 'KR' && f.region) {
+          next.region = '';
+        }
+        return next;
+      });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,8 +146,12 @@ export default function Register() {
       setError('비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (!form.region) {
-      setError('행정구역을 선택해주세요.');
+    if (!form.countryCode) {
+      setError('국가를 선택해주세요.');
+      return;
+    }
+    if (form.countryCode === 'KR' && !form.region) {
+      setError('한국 사용자는 행정구역을 선택해주세요.');
       return;
     }
     setLoading(true);
@@ -94,11 +160,12 @@ export default function Register() {
         email: form.email,
         password: form.password,
         nickname: form.nickname || undefined,
-        region: form.region,
+        countryCode: form.countryCode,
+        region: form.countryCode === 'KR' ? form.region : undefined,
       });
       setDevMode(!!res.data.devMode);
       setServerMsg(res.data.message || '');
-      if (res.data.previewUrl) setVerifyLink(res.data.previewUrl);
+      if (res.data.previewUrl) setVerifyLink(res.data.previewLink ?? res.data.previewUrl);
       setDone(true);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -218,29 +285,52 @@ export default function Register() {
             />
           </div>
 
-          {/* 행정구역 선택 */}
+          {/* 국가 선택 */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              지역(행정구역) *
-              {regionDetecting && (
+              국가 *
+              {geoDetecting && (
                 <span className="ml-2 text-xs text-teal-500 font-normal">위치 감지 중…</span>
               )}
-              {!regionDetecting && form.region && (
+              {!geoDetecting && form.countryCode && (
                 <span className="ml-2 text-xs text-slate-400 font-normal">IP 기반 자동 선택됨 (변경 가능)</span>
               )}
             </label>
             <select
-              value={form.region}
-              onChange={set('region')}
+              value={form.countryCode}
+              onChange={set('countryCode')}
               required
               className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
             >
-              <option value="">— 지역을 선택하세요 —</option>
-              {REGIONS.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+              <option value="">— 국가를 선택하세요 —</option>
+              {COUNTRIES.map(c => (
+                <option key={c.code} value={c.code}>{c.name}</option>
               ))}
             </select>
           </div>
+
+          {/* 한국일 때만 행정구역 선택 노출 */}
+          {form.countryCode === 'KR' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                지역(행정구역) *
+                {!geoDetecting && form.region && (
+                  <span className="ml-2 text-xs text-slate-400 font-normal">IP 기반 자동 선택됨</span>
+                )}
+              </label>
+              <select
+                value={form.region}
+                onChange={set('region')}
+                required
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              >
+                <option value="">— 지역을 선택하세요 —</option>
+                {REGIONS.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
@@ -250,7 +340,7 @@ export default function Register() {
 
           <button
             type="submit"
-            disabled={loading || regionDetecting}
+            disabled={loading || geoDetecting}
             className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
           >
             {loading ? '처리 중...' : '이메일로 가입하기'}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import DownloadStatsCard from '../components/DownloadStatsCard';
 
 interface ProfileData {
   id: number;
@@ -11,10 +12,11 @@ interface ProfileData {
   tier: string;
   download_count: number;
   created_at: string;
+  is_admin: boolean;
 }
 
 export default function Profile() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,8 @@ export default function Profile() {
   const [confirmText, setConfirmText] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
+
+  const isAdmin = !!user?.isAdmin || profile?.is_admin === true;
 
   useEffect(() => {
     api.get('/auth/me')
@@ -63,13 +67,15 @@ export default function Profile() {
         </div>
       )}
 
+      {/* 다운로드 통계 카드 (Admin 전용) */}
+      {isAdmin && <DownloadStatsCard />}
+
       {profile && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100">
           <Row label="이메일" value={profile.email} />
           <Row label="닉네임" value={profile.nickname ?? '—'} />
           <Row label="이메일 인증" value={profile.email_verified ? '완료' : '미완료'} />
           <Row label="플랜" value={tierLabel(profile.tier)} />
-          <Row label="검색 횟수" value={`${profile.download_count.toLocaleString()}회`} />
           <Row label="가입일" value={new Date(profile.created_at).toLocaleDateString('ko-KR')} />
         </div>
       )}

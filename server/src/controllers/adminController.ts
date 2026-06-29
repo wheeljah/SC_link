@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import { sendMail, getEmailProviderStatus, sendVerificationEmail } from '../services/emailService';
+import { computeUserStats } from './userStatsController';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
 
@@ -141,6 +142,8 @@ export async function testConnectivity(req: AuthRequest, res: Response): Promise
     { name: 'osf.io',             url: 'https://api.osf.io/v2/preprints/?filter[doi]=10.31234/osf.io/abc12&page[size]=1' },
     { name: 'datacite.org',       url: 'https://api.datacite.org/dois/10.5281/zenodo.31780' },
     { name: 'figshare.com',       url: 'https://api.figshare.com/v2/articles?page_size=1' },
+    { name: 'chemrxiv.org',       url: 'https://chemrxiv.org/engage/chemrxiv/public-api/v1/categories' },
+    { name: 'preprints.org',      url: 'https://www.preprints.org/manuscript/202101.0001/v1/download' },
   ];
   const axios = (await import('axios')).default;
   const results = await Promise.all(targets.map(async t => {
@@ -207,4 +210,126 @@ export async function resendUnverified(req: AuthRequest, res: Response): Promise
     await new Promise(r => setTimeout(r, 300)); // rate limit
   }
   res.json({ success: true, total: rows.length, sent, failed, results });
+}
+
+// ── 사용자별/전체 통계 (admin 전용) ─────────────────────────────────────────
+
+/**
+ * 특정 사용자 상세 통계 — admin이 다른 사용자 통계를 drill-down.
+ * GET /api/v1/admin/users/:id/stats
+ */
+export async function getUserStatsById(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+  const id = parseInt(req.params.id);
+  if (!id) { res.status(400).json({ success: false, message: 'Invalid user id' }); return; }
+
+  try {
+    // 사용자 존재 확인 + 기본 정보
+    const userRes = await pool.query(
+      `SELECT id, email, nickname, tier, created_at FROM users WHERE id = $1`,
+      [id]
+    );
+    if (!userRes.rows[0]) {
+      res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+      return;
+    }
+    const stats = await computeUserStats(id);
+    res.json({
+      success: true,
+      data: {
+        user: userRes.rows[0],
+        ...stats,
+      },
+    });
+  } catch (err) {
+    console.error('[admin/user-stats] error:', err);
+    res.status(500).json({ success: false, message: '통계 조회 실패' });
+  }
+}
+
+/**
+ * 전체 사용자 통계 집계 + 리더보드.
+ * GET /api/v1/admin/stats/all
+ */
+export async function getAllUserStatsSummary(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+
+  try {
+    const { rows } = await pool.query(`
+      WITH req AS (
+        SELECT user_id, status, input_type, created_at
+        FROM paper_requests
+      ),
+      agg AS (
+        SELECT
+          COUNT(*) AS searches_total,
+          COUNT(*) FILTER (WHERE status='completed') AS downloads_total,
+          COUNT(*) FILTER (WHERE status='failed') AS failed_total,
+          COUNT(*) FILTER (WHERE status='completed' AND created_at >= NOW() - INTERVAL '7 days') AS downloads_7d,
+          COUNT(*) FILTER (WHERE status='completed' AND created_at >= CURRENT_DATE) AS downloads_today
+        FROM req
+      ),
+      per_user AS (
+        SELECT
+          u.id, u.email, u.nickname, u.tier, u.created_at,
+          COALESCE(c.cnt, 0)::int AS downloads,
+          COALESCE(s.cnt, 0)::int AS searches,
+          COALESCE(f.cnt, 0)::int AS failures
+        FROM users u
+        LEFT JOIN (
+          SELECT user_id, COUNT(*) AS cnt FROM paper_requests
+          WHERE status='completed' GROUP BY user_id
+        ) c ON c.user_id = u.id
+        LEFT JOIN (
+          SELECT user_id, COUNT(*) AS cnt FROM paper_requests GROUP BY user_id
+        ) s ON s.user_id = u.id
+        LEFT JOIN (
+          SELECT user_id, COUNT(*) AS cnt FROM paper_requests
+          WHERE status='failed' GROUP BY user_id
+        ) f ON f.user_id = u.id
+      ),
+      leaderboard AS (
+        SELECT id, email, nickname, downloads, searches, failures
+        FROM per_user
+        ORDER BY downloads DESC, searches DESC
+        LIMIT 10
+      ),
+      input_dist AS (
+        SELECT input_type, COUNT(*)::int AS cnt
+        FROM req WHERE status='completed'
+        GROUP BY input_type ORDER BY cnt DESC
+      )
+      SELECT
+        (SELECT row_to_json(a) FROM agg a) AS aggregate,
+        (SELECT COALESCE(json_agg(row_to_json(l)), '[]'::json) FROM leaderboard l) AS leaderboard,
+        (SELECT COALESCE(json_agg(row_to_json(i)), '[]'::json) FROM input_dist i) AS input_distribution,
+        (SELECT COUNT(*)::int FROM users) AS user_count
+      ;
+    `);
+
+    const row = rows[0];
+    const agg = row.aggregate;
+    const searchesTotal = Number(agg.searches_total);
+    const downloadsTotal = Number(agg.downloads_total);
+
+    res.json({
+      success: true,
+      data: {
+        aggregate: {
+          user_count:        row.user_count,
+          searches_total:    searchesTotal,
+          downloads_total:   downloadsTotal,
+          failed_total:      Number(agg.failed_total),
+          downloads_today:   Number(agg.downloads_today),
+          downloads_7d:      Number(agg.downloads_7d),
+          success_ratio:     searchesTotal > 0 ? Number((downloadsTotal / searchesTotal).toFixed(4)) : 0,
+        },
+        leaderboard: row.leaderboard,
+        input_distribution: row.input_distribution,
+      },
+    });
+  } catch (err) {
+    console.error('[admin/all-stats] error:', err);
+    res.status(500).json({ success: false, message: '전체 통계 조회 실패' });
+  }
 }

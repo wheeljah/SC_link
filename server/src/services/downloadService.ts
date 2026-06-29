@@ -1450,6 +1450,229 @@ async function downloadFromCell(doi: string): Promise<DownloadResult | null> {
   return null;
 }
 
+// ─── OA: SciELO (남미·이베리아 학술 네트워크) ─────────────────────────────────
+// 브라질·칠레·아르헨티나·콜롬비아·페루·볼리비아 등 16개국 SciELO 컬렉션 통합 검색.
+// 모든 콘텐츠가 OA이며, citation_pdf_url 메타태그로 PDF 직접 추출 가능.
+// DOI prefix → SciELO collection host 매핑 (legacy scielo.php 엔드포인트 사용)
+const SCIELO_PREFIX_TO_HOST: Record<string, string> = {
+  '10.1590':  'scielo.br',      // Brazil
+  '10.4067':  'scielo.cl',      // Chile (main)
+  '10.7764':  'scielo.cl',      // Chile (some journals)
+  '10.18537': 'scielo.org.ar',  // Argentina
+  '10.7705':  'scielo.org.co',  // Colombia (legacy)
+  '10.15446': 'scielo.org.co',  // Colombia (current)
+  '10.22209': 'scielo.org.pe',  // Peru
+  '10.7476':  'scielo.org.bo',  // Bolivia
+  '10.3390':  'scielo.pt',      // SciELO Portugal (mdpi-style alt)
+};
+
+async function downloadFromSciELO(doi: string): Promise<DownloadResult | null> {
+  const prefix = doi.split('/')[0]?.toLowerCase();
+  const host = SCIELO_PREFIX_TO_HOST[prefix];
+  if (!host) {
+    console.log(`[scielo] Not a SciELO DOI: ${doi}`);
+    return null;
+  }
+  // SciELO pid는 DOI prefix 제외한 suffix (e.g. "10.1590/S0103-50532006000200015" → "S0103-50532006000200015")
+  const pid = doi.slice(prefix.length + 1);
+
+  try {
+    // 1) legacy scielo.php 엔드포인트로 article 페이지 요청
+    //    이 URL은 모든 SciELO collection에서 동작하며 항상 article HTML을 반환
+    const articleUrl = `https://www.${host}/scielo.php?script=sci_arttext&pid=${encodeURIComponent(pid)}&lng=en&nrm=iso&tlng=en`;
+    const res = await axios.get(articleUrl, {
+      maxRedirects: 5,
+      timeout: 15000,
+      headers: {
+        'User-Agent': randomUA(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+        'Accept-Language': 'en-US,en;q=0.9,pt;q=0.8,es;q=0.7',
+      },
+      responseType: 'text',
+      validateStatus: (s) => s < 400,
+    });
+
+    const html: string = res.data;
+    if (typeof html !== 'string' || html.length < 1000) {
+      console.log(`[scielo] Empty article page for ${doi}`);
+      return null;
+    }
+
+    const $ = cheerio.load(html);
+
+    // 2) 메타태그에서 PDF URL 추출 (가장 신뢰성 높음)
+    let pdfUrl: string | null = null;
+    $('meta[name="citation_pdf_url"]').each((_, el) => {
+      const content = $(el).attr('content');
+      if (content) { pdfUrl = content; return false; } // break
+    });
+
+    // 3) 메타태그가 없으면 dropdown 메뉴의 PDF 링크 검색
+    if (!pdfUrl) {
+      const finalUrl = res.request?.res?.responseUrl || articleUrl;
+      $('a').each((_, el) => {
+        const href = $(el).attr('href') ?? '';
+        if ((href.includes('format=pdf') && href.includes('/j/')) ||
+            (href.endsWith('.pdf') && href.includes('/j/'))) {
+          try {
+            pdfUrl = new URL(href, finalUrl).toString();
+            return false; // break
+          } catch { /* ignore */ }
+        }
+      });
+    }
+
+    if (!pdfUrl) {
+      console.log(`[scielo] No PDF link found for ${doi}`);
+      return null;
+    }
+
+    // 4) 메타데이터 추출 (citation_* 메타태그 활용)
+    const getMeta = (name: string): string | undefined =>
+      $(`meta[name="${name}"]`).first().attr('content') || undefined;
+    const title  = getMeta('citation_title');
+    const authors = $('meta[name="citation_author"]')
+      .map((_, el) => $(el).attr('content'))
+      .get()
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(', ') || undefined;
+    const journal = getMeta('citation_journal_title');
+    const yearStr = getMeta('citation_publication_date');
+    const year = yearStr ? parseInt(yearStr.slice(0, 4)) : undefined;
+
+    console.log(`[scielo] ${doi} → ${pdfUrl}`);
+    const dl = await downloadFileFromUrl(pdfUrl, doi, 'scielo_');
+    if (!dl) return null;
+    console.log(`[scielo] ✅ PDF 확보: ${doi}`);
+    return { ...dl, title, authors, year, journal };
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      console.log(`[scielo] ${e.response?.status ?? 'NET_ERR'} ${e.message}`);
+    } else {
+      console.log(`[scielo] ${(e as Error).message}`);
+    }
+    return null;
+  }
+}
+
+// ─── OA: CiNii Research (일본 학술 통합) ─────────────────────────────────────
+// 일본 국립정보학연구소(NII) 운영. 1,500만+ 일본 학술 논문/저널 색인.
+// OpenSearch API + CRID JSON-LD로 PDF URL 추출 (J-STAGE 등 다양한 저장소 링크).
+// Google Scholar에 잘 잡히지 않는 일본 학술지에 특히 강함.
+async function downloadFromCiNii(doi: string): Promise<DownloadResult | null> {
+  try {
+    // 1) OpenSearch API로 DOI 검색 (1건만)
+    const searchRes = await axios.get(
+      'https://cir.nii.ac.jp/opensearch/all',
+      {
+        params: { q: doi, format: 'json', count: 1 },
+        timeout: 12000,
+        headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
+      }
+    );
+
+    const totalResults: number = searchRes.data?.['opensearch:totalResults'] ?? 0;
+    const items: any[] = searchRes.data?.items ?? [];
+    if (!totalResults || !items.length) {
+      console.log(`[cinii] Not found: ${doi}`);
+      return null;
+    }
+
+    // 2) CRID URL 추출 후 detail JSON 요청 (메타데이터 + PDF link 포함)
+    const itemId: string = items[0]['@id'] ?? ''; // e.g. https://cir.nii.ac.jp/crid/1390282679150941440
+    if (!itemId.includes('/crid/')) {
+      console.log(`[cinii] No CRID for ${doi}`);
+      return null;
+    }
+
+    const detailRes = await axios.get(`${itemId}.json`, {
+      timeout: 12000,
+      headers: { 'User-Agent': 'ScholarLink/1.0 (mailto:support@scholarlink.app)' },
+    });
+    const detail = detailRes.data;
+
+    // 3) PDF URL 추출 — productIdentifier 또는 url[] 배열에서 /_pdf 패턴 우선
+    const pdfCandidates: string[] = [];
+
+    // productIdentifier 배열 스캔 (URI 타입 중 _pdf로 끝나는 것)
+    const productIds: any[] = detail?.productIdentifier ?? [];
+    for (const pi of productIds) {
+      const id = pi?.identifier;
+      if (id?.['@type'] === 'URI' && typeof id['@value'] === 'string') {
+        const url: string = id['@value'];
+        if (url.endsWith('/_pdf') || url.endsWith('.pdf')) {
+          pdfCandidates.push(url);
+        }
+      }
+    }
+
+    // url[] 배열도 동일하게 스캔 (중복되지만 안전망)
+    const urls: any[] = detail?.url ?? [];
+    for (const u of urls) {
+      const urlId: string = u?.['@id'] ?? '';
+      if (urlId.endsWith('/_pdf') || urlId.endsWith('.pdf')) {
+        if (!pdfCandidates.includes(urlId)) pdfCandidates.push(urlId);
+      }
+    }
+
+    if (!pdfCandidates.length) {
+      console.log(`[cinii] No PDF link found for ${doi}`);
+      return null;
+    }
+
+    // 4) 메타데이터 추출
+    const getTitle = (): string | undefined => {
+      const titles: any[] = detail?.['dc:title'] ?? [];
+      // 영문 제목 우선, 없으면 첫 번째
+      const en = titles.find((t: any) => t?.['@language'] === 'en');
+      return en?.['@value'] ?? titles[0]?.['@value'] ?? undefined;
+    };
+    const getAbstract = (): string | undefined => {
+      const descs: any[] = detail?.description ?? [];
+      const abs = descs.find((d: any) => d?.type === 'abstract');
+      const notations: any[] = abs?.notation ?? [];
+      const en = notations.find((n: any) => n?.['@language'] === 'en');
+      return en?.['@value']?.replace(/<[^>]+>/g, '').trim() ?? undefined; // HTML 태그 제거
+    };
+    const title    = getTitle();
+    const abstract = getAbstract();
+    const creators: any[] = detail?.creator ?? [];
+    const authors  = creators
+      .map((c: any) => {
+        const names: any[] = c?.['foaf:name'] ?? [];
+        const en = names.find((n: any) => n?.['@language'] === 'en');
+        return en?.['@value'] ?? names[0]?.['@value'];
+      })
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(', ') || undefined;
+    const pub = detail?.publication ?? {};
+    const journalTitles: any[] = pub?.['prism:publicationName'] ?? [];
+    const journal = journalTitles.find((j: any) => j?.['@language'] === 'en')?.['@value']
+      ?? journalTitles[0]?.['@value'] ?? undefined;
+    const yearStr: string = pub?.['prism:publicationDate'] ?? '';
+    const year = yearStr ? parseInt(yearStr.slice(0, 4)) : undefined;
+
+    // 5) PDF 다운로드 시도 (첫 번째 후보부터)
+    for (const pdfUrl of pdfCandidates) {
+      console.log(`[cinii] ${doi} → ${pdfUrl}`);
+      const dl = await downloadFileFromUrl(pdfUrl, doi, 'cinii_');
+      if (dl) {
+        console.log(`[cinii] ✅ PDF 확보: ${doi}`);
+        // abstract는 본문에서 보이지 않으므로 로그만
+        if (abstract) console.log(`[cinii] abstract (${abstract.length} chars) extracted`);
+        return { ...dl, title, authors, year, journal };
+      }
+    }
+    return null;
+  } catch (e) {
+    if (axios.isAxiosError(e)) console.log(`[cinii] ${e.response?.status ?? 'NET_ERR'} ${e.message}`);
+    else console.log(`[cinii] ${(e as Error).message}`);
+    return null;
+  }
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export async function downloadPaper(
   doi: string,
@@ -1496,6 +1719,8 @@ export async function downloadPaper(
     ['PLOS',             () => downloadFromPLOS(doi)],
     ['Science/AAAS',     () => downloadFromScience(doi)],
     ['Cell Press',       () => downloadFromCell(doi)],
+    ['SciELO',           () => downloadFromSciELO(doi)],
+    ['CiNii Research',   () => downloadFromCiNii(doi)],
   ];
 
   for (const [name, fn] of oaSources) {

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getApiBaseURL } from '../services/api';
+import { getApiBaseURL, initPromise } from '../services/api';
+import UserStatsModal from '../components/UserStatsModal';
 
 const ADMIN_EMAIL = 'wheeljah@gmail.com';
 
@@ -20,13 +21,30 @@ interface Download {
   normalized_doi: string | null; title: string | null; status: string;
   file_size: number | null; user_email: string | null; created_at: string;
 }
+interface AllStatsSummary {
+  aggregate: {
+    user_count: number;
+    searches_total: number;
+    downloads_total: number;
+    failed_total: number;
+    downloads_today: number;
+    downloads_7d: number;
+    success_ratio: number;
+  };
+  leaderboard: Array<{
+    id: number; email: string; nickname: string | null;
+    downloads: number; searches: number; failures: number;
+  }>;
+  input_distribution: Array<{ input_type: string; cnt: number }>;
+}
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` };
 }
 
-async function csvDownload(url: string, filename: string) {
-  const res = await fetch(url, { headers: authHeaders() });
+async function csvDownload(path: string, filename: string) {
+  await initPromise;
+  const res = await fetch(`${getApiBaseURL()}${path}`, { headers: authHeaders() });
   const blob = await res.blob();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -42,6 +60,7 @@ export default function Admin() {
 
   const [tab, setTab] = useState<'users' | 'downloads'>('users');
   const [stats, setStats] = useState<Stats | null>(null);
+  const [allStats, setAllStats] = useState<AllStatsSummary | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [downloads, setDownloads] = useState<Download[]>([]);
   const [userTotal, setUserTotal] = useState(0);
@@ -51,8 +70,8 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [deleteDays, setDeleteDays] = useState('30');
   const [msg, setMsg] = useState('');
+  const [selectedUser, setSelectedUser] = useState<{ id: number; email: string } | null>(null);
 
-  const api = getApiBaseURL();
   const PER = 50;
 
   useEffect(() => {
@@ -61,33 +80,51 @@ export default function Admin() {
   }, [isLoggedIn, isAdmin, navigate]);
 
   const loadStats = useCallback(async () => {
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/stats`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) setStats(j.data);
-  }, [api]);
+  }, []);
+
+  const loadAllStats = useCallback(async () => {
+    await initPromise;
+    const api = getApiBaseURL();
+    try {
+      const res = await fetch(`${api}/admin/stats/all`, { headers: authHeaders() });
+      const j = await res.json();
+      if (j.success) setAllStats(j.data);
+    } catch { /* 무시 */ }
+  }, []);
 
   const loadUsers = useCallback(async (page: number) => {
+    await initPromise;
+    const api = getApiBaseURL();
     setLoading(true);
     const res = await fetch(`${api}/admin/users?page=${page}&limit=${PER}`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) { setUsers(j.data); setUserTotal(j.total); }
     setLoading(false);
-  }, [api]);
+  }, []);
 
   const loadDownloads = useCallback(async (page: number) => {
+    await initPromise;
+    const api = getApiBaseURL();
     setLoading(true);
     const res = await fetch(`${api}/admin/downloads?page=${page}&limit=${PER}`, { headers: authHeaders() });
     const j = await res.json();
     if (j.success) { setDownloads(j.data); setDlTotal(j.total); }
     setLoading(false);
-  }, [api]);
+  }, []);
 
-  useEffect(() => { if (isAdmin) { loadStats(); loadUsers(1); } }, [isAdmin, loadStats, loadUsers]);
+  useEffect(() => { if (isAdmin) { loadStats(); loadAllStats(); loadUsers(1); } }, [isAdmin, loadStats, loadAllStats, loadUsers]);
   useEffect(() => { if (isAdmin && tab === 'downloads') loadDownloads(dlPage); }, [isAdmin, tab, dlPage, loadDownloads]);
   useEffect(() => { if (isAdmin && tab === 'users')     loadUsers(userPage);     }, [isAdmin, tab, userPage, loadUsers]);
 
   const handleDeleteUser = async (id: number, email: string) => {
     if (!confirm(`${email} 계정을 삭제하시겠습니까?`)) return;
+    await initPromise;
+    const api = getApiBaseURL();
     await fetch(`${api}/admin/users/${id}`, { method: 'DELETE', headers: authHeaders() });
     setUsers(prev => prev.filter(u => u.id !== id));
     setUserTotal(t => t - 1);
@@ -98,6 +135,8 @@ export default function Admin() {
     const days = parseInt(deleteDays);
     if (!days || days < 1) return;
     if (!confirm(`${days}일 이전 다운로드 기록을 삭제하시겠습니까?`)) return;
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/downloads/old`, {
       method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ days }),
     });
@@ -109,6 +148,8 @@ export default function Admin() {
   const handleResendUnverified = async () => {
     if (!confirm('미인증 사용자 전체에게 인증 메일을 재발송하시겠습니까?')) return;
     setMsg('발송 중...');
+    await initPromise;
+    const api = getApiBaseURL();
     const res = await fetch(`${api}/admin/resend-unverified`, { method: 'POST', headers: authHeaders() });
     const j = await res.json();
     setMsg(`재발송 완료: 성공 ${j.sent}건, 실패 ${j.failed}건 (총 ${j.total}명)`);
@@ -148,6 +189,80 @@ export default function Admin() {
         </div>
       )}
 
+      {/* 전체 사용자 통계 + 리더보드 */}
+      {allStats && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+          <h2 className="text-base font-semibold text-slate-900 mb-4">📊 전체 사용자 통계</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <AggregateCell label="전체 검색" value={allStats.aggregate.searches_total.toLocaleString()} sub="모든 사용자 합계" />
+            <AggregateCell label="전체 다운로드" value={allStats.aggregate.downloads_total.toLocaleString()} sub={`성공 ${Math.round(allStats.aggregate.success_ratio * 100)}%`} />
+            <AggregateCell label="오늘 다운로드" value={allStats.aggregate.downloads_today.toLocaleString()} sub={`+${allStats.aggregate.downloads_7d.toLocaleString()} (7일)`} />
+            <AggregateCell label="전체 실패" value={allStats.aggregate.failed_total.toLocaleString()} sub="재시도 가능" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 리더보드 */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">🏆 다운로드 Top 10</h3>
+              {allStats.leaderboard.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4">아직 다운로드 데이터가 없습니다.</p>
+              ) : (
+                <div className="space-y-1">
+                  {allStats.leaderboard.map((u, idx) => (
+                    <button
+                      key={u.id}
+                      onClick={() => setSelectedUser({ id: u.id, email: u.email })}
+                      className="w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-left"
+                    >
+                      <span className={`w-5 text-center font-bold ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-slate-400' : idx === 2 ? 'text-orange-400' : 'text-slate-300'}`}>
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 truncate font-mono text-slate-700">{u.email}</span>
+                      <span className="text-slate-400 shrink-0">검색 {u.searches}</span>
+                      <span className="font-semibold text-teal-700 shrink-0">↓ {u.downloads}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 입력 유형 분포 (전체) */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">📥 입력 유형 분포</h3>
+              {allStats.input_distribution.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4">아직 성공한 다운로드가 없습니다.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {(() => {
+                    const total = allStats.input_distribution.reduce((s, i) => s + i.cnt, 0);
+                    const labelMap: Record<string, string> = {
+                      doi: 'DOI', pmid: 'PubMed', arxiv: 'arXiv', url: 'URL', title: '논문 제목',
+                    };
+                    return allStats.input_distribution.map(it => (
+                      <div key={it.input_type} className="flex items-center gap-2">
+                        <span className="w-16 shrink-0 text-xs text-slate-500">{labelMap[it.input_type] || it.input_type}</span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="bg-teal-500 h-full rounded-full"
+                            style={{ width: `${(it.cnt / total) * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-12 text-right text-xs font-medium text-slate-700">
+                          {Math.round((it.cnt / total) * 100)}%
+                        </span>
+                        <span className="w-10 text-right text-xs text-slate-400">
+                          {it.cnt}
+                        </span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="flex border-b border-slate-200">
@@ -171,7 +286,7 @@ export default function Admin() {
                 미인증 재발송
               </button>
               <button
-                onClick={() => csvDownload(`${api}/admin/export/users`, `users_${new Date().toISOString().slice(0,10)}.csv`)}
+                onClick={() => csvDownload('/admin/export/users', `users_${new Date().toISOString().slice(0,10)}.csv`)}
                 className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition-colors">
                 CSV 내보내기
               </button>
@@ -191,7 +306,7 @@ export default function Admin() {
                 </button>
               </div>
               <button
-                onClick={() => csvDownload(`${api}/admin/export/downloads`, `downloads_${new Date().toISOString().slice(0,10)}.csv`)}
+                onClick={() => csvDownload('/admin/export/downloads', `downloads_${new Date().toISOString().slice(0,10)}.csv`)}
                 className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition-colors">
                 CSV 내보내기
               </button>
@@ -213,7 +328,7 @@ export default function Admin() {
                     <th className="pb-2 pr-4">다운로드</th>
                     <th className="pb-2 pr-4">가입일</th>
                     <th className="pb-2 pr-4">지역</th>
-                    <th className="pb-2">삭제</th>
+                    <th className="pb-2">액션</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,10 +346,18 @@ export default function Admin() {
                       <td className="py-2 pr-4 text-slate-400 text-xs">{new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
                       <td className="py-2 pr-4 text-xs text-slate-500">{u.region || u.region_ip || '-'}</td>
                       <td className="py-2">
-                        {u.email !== ADMIN_EMAIL && (
-                          <button onClick={() => handleDeleteUser(u.id, u.email)}
-                            className="text-xs text-red-500 hover:text-red-700">삭제</button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setSelectedUser({ id: u.id, email: u.email })}
+                            className="text-xs text-teal-600 hover:text-teal-800 font-medium">
+                            통계
+                          </button>
+                          {u.email !== ADMIN_EMAIL && (
+                            <button onClick={() => handleDeleteUser(u.id, u.email)}
+                              className="text-xs text-red-500 hover:text-red-700">
+                              삭제
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -301,6 +424,25 @@ export default function Admin() {
           )}
         </div>
       </div>
+
+      {/* 사용자 통계 모달 */}
+      {selectedUser && (
+        <UserStatsModal
+          userId={selectedUser.id}
+          email={selectedUser.email}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AggregateCell({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="text-lg font-bold text-slate-900 mt-1">{value}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>
     </div>
   );
 }

@@ -265,6 +265,11 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   // 행정구역 컬럼 추가
   { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS region VARCHAR(20)`, params: [] },
   { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS region_ip VARCHAR(20)`, params: [] },
+  // 커뮤니티 답변 이메일 알림 수신 동의 (기본 TRUE — 기존 사용자 호환)
+  { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_community_response BOOLEAN DEFAULT TRUE`, params: [] },
+  // 국가 코드 (ISO 3166-1 alpha-2) — 외국인 가입 허용 (2026-06-28 추가)
+  { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code VARCHAR(2) DEFAULT NULL`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_users_country ON users(country_code)`, params: [] },
 ];
 
 export async function migrate(): Promise<void> {
