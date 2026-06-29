@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getApiBaseURL, initPromise } from '../services/api';
 import DownloadStatsCard from './DownloadStatsCard';
+import { isAdminUser } from '../constants/auth';
 
 interface User {
   id: number;
@@ -24,7 +25,7 @@ interface Props {
  */
 export default function UserStatsModal({ userId, email, onClose }: Props) {
   const { user } = useAuth();
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = isAdminUser(user);
 
   const [userInfo, setUserInfo] = useState<User | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

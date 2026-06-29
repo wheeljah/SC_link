@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import DownloadStatsCard from '../components/DownloadStatsCard';
+import { isAdminUser } from '../constants/auth';
 
 interface ProfileData {
   id: number;
@@ -25,7 +26,7 @@ export default function Profile() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
 
-  const isAdmin = !!user?.isAdmin || profile?.is_admin === true;
+  const isAdmin = isAdminUser(user) || profile?.is_admin === true;
 
   useEffect(() => {
     api.get('/auth/me')

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PaperRequest } from '../types';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../constants/auth';
 
 const STATUS_ICON: Record<string, string> = {
   pending: '⏳', completed: '✅', failed: '❌',
@@ -22,7 +23,7 @@ interface StatsSummary {
 
 export default function History() {
   const { user } = useAuth();
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = isAdminUser(user);
 
   const [history, setHistory] = useState<PaperRequest[]>([]);
   const [loading, setLoading] = useState(true);

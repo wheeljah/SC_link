@@ -1,10 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../constants/auth';
 import LangToggle from './LangToggle';
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
-  const isAdmin = user?.email === 'wheeljah@gmail.com';
+  const isAdmin = isAdminUser(user);
   const navigate = useNavigate();
 
   const handleLogout = async () => {

@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiBaseURL, initPromise } from '../services/api';
 import UserStatsModal from '../components/UserStatsModal';
-
-const ADMIN_EMAIL = 'wheeljah@gmail.com';
+import { ADMIN_EMAIL, isAdminUser } from '../constants/auth';
 
 interface Stats {
   user_count: number; download_count: number; bug_count: number;
@@ -56,7 +55,7 @@ async function csvDownload(path: string, filename: string) {
 export default function Admin() {
   const { user, isLoggedIn } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   const [tab, setTab] = useState<'users' | 'downloads'>('users');
   const [stats, setStats] = useState<Stats | null>(null);

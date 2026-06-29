@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { getApiBaseURL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from '../components/AuthModal';
-
-const ADMIN_EMAIL = 'wheeljah@gmail.com';
+import { isAdminUser } from '../constants/auth';
 
 type Status = 'open' | 'in_progress' | 'resolved';
 
@@ -32,7 +31,7 @@ const NEXT_STATUS: Record<Status, Status> = {
 
 export default function BugReport() {
   const { user, isLoggedIn } = useAuth();
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminUser(user);
 
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);

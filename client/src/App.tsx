@@ -19,6 +19,7 @@ import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import CitationNetworkPage from './pages/CitationNetworkPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { isAdminUser } from './constants/auth';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuth();
@@ -27,7 +28,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  return user?.email === 'wheeljah@gmail.com' ? <>{children}</> : <Navigate to="/" replace />;
+  return isAdminUser(user) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 function Layout() {
