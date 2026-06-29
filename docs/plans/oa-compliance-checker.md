@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | **1.1** |
+| 문서 버전 | **1.2** |
 | 작성일 | 2026-06-29 |
 | 대상 저장소 | ScholarLink (`wheeljah/SC_link`) |
 | 작성자 | Mavis |
@@ -24,6 +24,16 @@ v1.0 초안 작성 후 외부 API 현실 점검 + ScholarLink 코드베이스 �
 | §8 | Phase 1을 **파일 단위 그뤠뉄러 태스크**로 분해 (1-1~1-9) | 첫 주 작업 명확화 |
 | §11.2 | `node-cache` (이미 citationService에서 사용 중) **인-메모리 캐시 + DB 영구 캐시 이중화** | 기존 패턴 재사용 |
 | §12.1 | **검증된 URL**로 갱신 | 2026년 6월 실 호출 결과 반영 |
+
+**v1.2 갱신** (사용자 추가 조사 요청 → 실시간 소스 발견):
+
+| 섹션 | 변경 | 비고 |
+|---|---|---|
+| §3.2.2 | **cOAlition S JCT 공개 API 발견** — Sherpa 대체 | `api.journalcheckertool.org` 무료, 30+ cOAlition S 펀더 |
+| §3.2.6 | **Europe PMC Articles + Grist API** 신규 추가 | 라이선스 + 펀더 grant 매핑 |
+| §3.2.7 | **OpenAlex** 신규 추가 | 240M 논문 ROR ID + OA status |
+| §6.7 | **verdict 알고리즘 업데이트** — JCT API 우선 호출 + 시드 DB 폴백 | 더 정확한 판정 |
+| §11.4 | 비용 추정 갱신 | 모두 무료, **총 $0/월 확정** |
 
 **변경 안 함** (v1.0 유지):
 - 페르소나/시나리오, 아키텍처 다이어그램, DB 테이블 구조, 비기능 요구사항, 한국 특화 전략 — 모두 유효
@@ -314,6 +324,136 @@ export async function seedFunderPolicies() {
 - **장점**: Unpaywall/Crossref가 빠뜨린 ORCID-ROR 매핑 보완
 - **헤더**: `User-Agent: ScholarLink/1.0 (mailto:support@scholarlink.app)` (예의상 권장)
 
+#### 3.2.6 cOAlition S Journal Checker Tool (JCT) — **⭐ 1순위 실시간 소스** [v1.2 신규]
+
+> 2026-06 사용자 추가 조사로 발견. **Sherpa Juliet을 완벽하게 대체**하는 무료 공개 API.
+
+- **베이스 URL**: `https://api.journalcheckertool.org/`
+- **인증**: **무료 / API 키 불요**
+- **라이선스**: 콘텐츠 CC BY 4.0
+- **제공**: cOAlition S Office (European Science Foundation)
+
+**4가지 엔드포인트 (모두 GET, JSON)**:
+
+| 엔드포인트 | 용도 | 사용 시점 |
+|---|---|---|
+| `/calculate?issn={issn}&funder={id}&ror={id}` | 단일 DOI → 펀더+저널+기관 기반 컴플라이언스 판정 | DOI 단일 체크 |
+| `/funder_language/{funder_id}` | 펀더별 정책 한국어/영어 자연어 설명 | UI 표시 |
+| `/tj/{issn}` | ISSN이 Transformative Journal인지 확인 | 추가 정보 |
+| `/ta?issn={issn}&ror={ror}` | Transformative Agreement 매칭 | 기관 TA 보유 시 |
+
+**funder ID 목록** (2026-06-29 확인, ~30개 cOAlition S 펀더):
+- `wellcome`, `europeancommissionhorizoneuropeframeworkprogramme`, `unitedkingdomresearchinnovationukri`, `austriansciencefundfwf`, `billmelindagatesfoundation`, `frenchnationalresearchagencyanr`, `howardhughesmedicalinstitutehhmi`, `swissnationalsciencefoundationsnsf`, `academyoffinlandaka`, `researchcouncilofnorwayrcn`, `netherlandsorganisationforscientificresearchnwo`, `nationalhealthandmedicalresearchcouncil`, `sciencefoundationirelandsfi`, `worldhealthorganizationwho`, `aligningscienceacrossparkinsonsasap`, 등
+
+⚠️ **NRF, KAIST, MOST, JSPS, DFG, NSF는 cOAlition S 미가입** → JCT API로 조회 불가. → **수동 시드 DB로 폴백** (§3.2.2 그대로 유지)
+
+**실제 응답 예시** (`/calculate?issn=1932-6203&funder=wellcome&ror=052gg0110`):
+```json
+{
+  "compliant": true,
+  "results": [
+    {
+      "route": "fully_oa",
+      "compliant": "yes",
+      "log": [
+        { "code": "FullOA.InDOAJ" },
+        { "code": "FullOA.Compliant", "parameters": { "licence": ["CC BY", "CC-BY-SA"] } }
+      ]
+    },
+    { "route": "self_archiving", "compliant": "yes" },
+    { "route": "ta", "compliant": "unknown" },
+    { "route": "tj", "compliant": "no" },
+    { "route": "hybrid", "compliant": "no" }
+  ],
+  "cards": [
+    { "id": "wellcome_primary_route", "compliant": true, "preferred": true }
+  ]
+}
+```
+
+**왜 강력한가**:
+- 5가지 OA 경로(Fully OA / Self-archiving / TA / TJ / Hybrid)를 **각각** 컴플라이언스 판정
+- 라이선스, embargo, 버전 등 **세부 조건 자동 검증**
+- DOAJ + Open Access Button + Transformative Agreements DB **3개 외부 소스 교차 검증**
+- cOAlition S 펀더 정책 **실시간 업데이트** (자동 반영)
+
+**구현 위치**: `services/policyProviders/cOAlitionSProvider.ts`
+
+**Rate limit**: 공식 명시 없음. 운영 중 모니터링 필요 (분당 60건 추정).
+
+#### 3.2.7 Europe PMC — 라이프사이언스 보강 [v1.2 신규]
+
+- **베이스 URL**: `https://www.ebi.ac.uk/europepmc/`
+- **인증**: 무료 / 키 불요
+- **커버리지**: 생물/의학 분야 6.5M OA 논문 (PMC + Europe PMC Funders Group 멤버 grant 매핑)
+
+**엔드포인트**:
+
+| 경로 | 용도 |
+|---|---|
+| `/webservices/rest/search?query=DOI:{doi}&resultType=core&format=json` | DOI → 라이선스 + PMC ID + isOpenAccess + 저자 ORCID + 소속 |
+| `/GristAPI/rest/get/query=ga:"{funder_name}"&resultType=core&format=json` | 펀더 → grant 목록 |
+| `/GristAPI/rest/get/query=gid:{grant_id}` | grant ID → grant 메타 + 소속 paper |
+| `/oai/...?verb=ListRecords&metadataPrefix=pmc` | OAI-PMH 벌크 harvest (월 1회) |
+
+**실제 응답 (DOI:10.1038/s41586-020-2649-2)**:
+```json
+{
+  "isOpenAccess": "Y",
+  "license": "cc by",
+  "pmcid": "PMC7759461",
+  "fullTextUrlList": [{
+    "availability": "Open access",
+    "url": "https://europepmc.org/articles/PMC7759461"
+  }],
+  "authorIdList": { "authorId": [{ "type": "ORCID", "value": "0000-0002-5263-5070" }, ...] },
+  "firstPublicationDate": "2020-09-16"
+}
+```
+
+**핵심 활용**:
+- 라이프사이언스 논문의 **즉시 OA+CC-BY 확인** → Plan S 펀더 자동 컴플라이언스
+- PMC fulltext URL → ScholarLink 다운로더 fallback 소스 추가
+- 저자 ORCID → 일괄 ORCID 체크 (Phase 3)
+
+**구현 위치**: `services/policyProviders/europePmcProvider.ts`
+
+#### 3.2.8 OpenAlex — ROR + OA 보강 [v1.2 신규]
+
+- **URL**: `https://api.openalex.org/works/doi:{doi}?select=id,doi,open_access,authorships,grants,funders`
+- **인증**: 무료 / 키 불요 (단, **User-Agent 헤더 권장**)
+- **커버리지**: 240M 논문
+
+**응답 핵심 필드**:
+```json
+{
+  "id": "https://openalex.org/W3035965352",
+  "open_access": {
+    "is_oa": true,
+    "oa_status": "hybrid",          // gold | green | hybrid | bronze | closed
+    "oa_url": "https://www.nature.com/articles/s41586-020-2649-2.pdf",
+    "any_repository_has_fulltext": true
+  },
+  "authorships": [{
+    "author": { "orcid": "https://orcid.org/0000-0002-5263-5070" },
+    "institutions": [{
+      "ror": "https://ror.org/01an7q238",  ← ROR ID
+      "display_name": "University of California, Berkeley",
+      "country_code": "US"
+    }]
+  }],
+  "grants": [{ "funder": "https://openalex.org/F4320332161", "award_id": "..." }],
+  "funders": [{ "id": "...", "display_name": "..." }]
+}
+```
+
+**왜 강력한가**:
+- Unpaywall/Crossref가 빠뜨린 **ORCID↔ROR 매핑** 보완
+- **저자 소속 ROR ID** 추출 → `policies_institutions` 매핑용
+- `any_repository_has_fulltext` → Green OA 가능 여부 판정
+
+**구현 위치**: `services/policyProviders/openAlexProvider.ts`
+
 ---
 
 ## 4. 시스템 아키텍처
@@ -559,9 +699,17 @@ GET /api/v1/stats/export?format=csv&scope=institution&country=KR
   → text/csv (Content-Disposition: attachment)
 ```
 
-### 6.7 verdict 계산 알고리즘 (의사코드)
+### 6.7 verdict 계산 알고리즘 (의사코드) — v1.2 JCT API 통합
 
-**핵심 함수**: `computeVerdict(paperMetadata, oaData, funderPolicies) → ComplianceVerdict`
+**핵심 함수**: `computeVerdict(doi, crossrefData, oaData, funderPolicies) → ComplianceVerdict`
+
+**우선순위 체인**:
+```
+1. Europe PMC (라이프사이언스) → 즉시 OA + 라이선스 → Plan S 펀더면 자동 COMPLIANT
+2. cOAlition S JCT API (30+ 펀더) → 실시간 정책 판정
+3. 수동 시드 DB (NRF, KAIST 등 cOAlition S 미가입) → 룰 매칭
+4. 모두 실패 → UNCLEAR
+```
 
 ```typescript
 // server/src/services/complianceEngine.ts (Phase 1-2 작성)
@@ -943,15 +1091,20 @@ function normalizeLicense(urlOrSlug: string | null): string | null {
 - 정책 시뮬레이션: 일당 5건
 - 구현: `middleware/complianceRateLimit.ts` (기존 `middleware/rateLimit.ts` 패턴 확장)
 
-### 11.4 비용 (Render + Neon)
+### 11.4 비용 (Render + Neon) — v1.2 최종 확정
 
 - Render $5/월 (이미 사용 중)
 - Neon Free tier 내 충분 — 신규 테이블 6개 + 인덱스 8개 = 약 50MB
-- Unpaywall: 무료, scholar.ourresearch.org 가입 필요 (이미)
-- **Sherpa Juliet 의존 제거** (2026-07 sunset 대응) — 시드 DB 사용
-- OpenAIRE: 무료
-- ROR: 무료
-- ROARMAP OAI-PMH: 무료
+- **모든 외부 API 무료** (v1.2 검증):
+  - Unpaywall: 무료, scholar.ourresearch.org 가입 필요 (이미)
+  - **cOAlition S JCT: 무료** (v1.2 신규) — `api.journalcheckertool.org`
+  - **Europe PMC: 무료** (v1.2 신규) — `ebi.ac.uk/europepmc/...`
+  - **OpenAlex: 무료** (v1.2 신규) — `api.openalex.org`
+  - Crossref Funder Registry: 무료
+  - OpenAIRE: 무료
+  - ROR: 무료
+  - ROARMAP OAI-PMH: 무료
+  - ~~Sherpa Juliet~~: 의존 제거 (2026-07 sunset)
 
 총 추가 비용: **$0/월** (기존 인프라 내)
 
@@ -992,7 +1145,14 @@ Layer 3 (외부 API)
 
 ### 12.1 참고 자료 (2026-06-29 실 호출 검증 완료)
 
-**사용 확정** (무료 + 안정):
+**⭐ 1순위 실시간 소스** (v1.2 신규):
+- **cOAlition S Journal Checker Tool API**: https://journalcheckertool.org/apidocs — `https://api.journalcheckertool.org/calculate?issn={issn}&funder={id}&ror={id}` — 무료, 30+ cOAlition S 펀더
+- **cOAlition S Funder ID 목록**: https://journalcheckertool.org/funder-ids
+- **Europe PMC Articles API**: https://europepmc.org/RestfulWebService — `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:{doi}&resultType=core&format=json`
+- **Europe PMC Grist API**: https://europepmc.org/GristAPI — `https://www.ebi.ac.uk/europepmc/GristAPI/rest/get/query=...`
+- **OpenAlex**: https://api.openalex.org/ — `https://api.openalex.org/works/doi:{doi}?select=id,doi,open_access,authorships,grants,funders` (User-Agent 헤더 권장)
+
+**사용 확정** (기존):
 - Unpaywall Data API: https://unpaywall.org/products/data-feed — `https://api.unpaywall.org/v2/{doi}?email={UNPAYWALL_EMAIL}`
 - Crossref Funder Registry: https://www.crossref.org/services/funder-registry/ — `https://api.crossref.org/works/{doi}` 응답에 `funder[]` 포함
 - OpenAIRE Graph: https://graph.openaire.eu/ — `https://api.openaire.eu/graph/v1/researchProducts?doi={doi}` (이미 ScholarLink 통합)
