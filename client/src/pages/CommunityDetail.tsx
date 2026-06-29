@@ -21,7 +21,10 @@ interface Detail {
   view_count: number;
   created_at: string;
   author_nickname: string;
+  user_id?: number;             // 요청자 ID (프론트에서 본인 식별용)
   responses: Response[];
+  can_view_responses: boolean;  // false면 응답 본문 비공개 (UI에서 안내 표시)
+  response_count?: number;      // 잠금 상태일 때 답변 개수
 }
 
 export default function CommunityDetail() {
@@ -116,30 +119,48 @@ export default function CommunityDetail() {
         </div>
       </div>
 
-      {/* 응답 목록 */}
-      {detail.responses.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold text-slate-800">응답 {detail.responses.length}개</h2>
-          {detail.responses.map(r => (
-            <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-800">{r.responder_nickname || '익명'}</span>
-                <span className="text-xs text-slate-400">{new Date(r.created_at).toLocaleDateString('ko-KR')}</span>
+      {/* 응답 목록 — 권한자에 한해 표시 */}
+      {detail.can_view_responses ? (
+        detail.responses.length > 0 ? (
+          <div className="space-y-3">
+            <h2 className="font-semibold text-slate-800">응답 {detail.responses.length}개</h2>
+            {detail.responses.map(r => (
+              <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-800">{r.responder_nickname || '익명'}</span>
+                  <span className="text-xs text-slate-400">{new Date(r.created_at).toLocaleDateString('ko-KR')}</span>
+                </div>
+                {r.message && <p className="text-sm text-slate-600">{r.message}</p>}
+                {r.file_url && (
+                  <a
+                    href={r.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                  >
+                    📎 파일 다운로드
+                    {r.file_size && <span className="text-teal-500">({(r.file_size / 1024 / 1024).toFixed(1)} MB)</span>}
+                  </a>
+                )}
               </div>
-              {r.message && <p className="text-sm text-slate-600">{r.message}</p>}
-              {r.file_url && (
-                <a
-                  href={r.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
-                >
-                  📎 파일 다운로드
-                  {r.file_size && <span className="text-teal-500">({(r.file_size / 1024 / 1024).toFixed(1)} MB)</span>}
-                </a>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
+        ) : null
+      ) : (
+        /* 권한 없음 — 답변 개수만 노출 + 안내 */
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
+          <div className="flex items-center gap-2 text-slate-700">
+            <span className="text-base">🔒</span>
+            <h2 className="font-semibold">응답 {(detail.response_count ?? 0)}개 (비공개)</h2>
+          </div>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            답변 내용은 <strong>요청자</strong>, <strong>답변 작성자</strong>, <strong>어드민</strong>에게만 공개됩니다.
+            {detail.response_count && detail.response_count > 0
+              ? ' 직접 답변을 등록하면 본인과 어드민이 그 내용을 볼 수 있습니다.'
+              : isLoggedIn
+                ? ' 첫 번째 답변을 등록해 보세요.'
+                : ' 로그인 후 답변을 등록할 수 있습니다.'}
+          </p>
         </div>
       )}
 

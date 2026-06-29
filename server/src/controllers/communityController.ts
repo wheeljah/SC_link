@@ -3,6 +3,8 @@ import { pool } from '../db/pool';
 import { AuthRequest } from '../middleware/auth';
 import { sendCommunityResponseNotification } from '../services/emailService';
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
+
 export async function listRequests(req: Request, res: Response): Promise<void> {
   const status = req.query.status as string;
   const page = parseInt(req.query.page as string) || 1;
@@ -32,7 +34,7 @@ export async function listRequests(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data: rows, total: parseInt(countRows[0].total), page, limit });
 }
 
-export async function getRequest(req: Request, res: Response): Promise<void> {
+export async function getRequest(req: AuthRequest, res: Response): Promise<void> {
   const id = parseInt(req.params.id);
   await pool.query(`UPDATE community_requests SET view_count = view_count + 1 WHERE id = $1`, [id]);
 
@@ -42,14 +44,54 @@ export async function getRequest(req: Request, res: Response): Promise<void> {
     [id]
   );
   if (!rows[0]) { res.status(404).json({ success: false, message: '요청을 찾을 수 없습니다.' }); return; }
+  const request = rows[0];
 
-  const { rows: responses } = await pool.query(
-    `SELECT r.id, r.message, r.file_url, r.file_size, r.created_at, u.nickname as responder_nickname
-     FROM community_responses r JOIN users u ON u.id = r.user_id WHERE r.request_id = $1 ORDER BY r.created_at`,
-    [id]
-  );
+  // ── 답변 접근 권한 체크 ──
+  // 허용 대상: 요청자 본인 / 기존 답변자 / 어드민
+  // 미인증 또는 권한 없으면 → responses 빈 배열 + can_view_responses=false 반환
+  const viewerUserId = req.userId ?? null;
+  const viewerEmail = req.userEmail ?? '';
+  const isAdmin = viewerEmail === ADMIN_EMAIL;
+  const isRequester = viewerUserId !== null && request.user_id === viewerUserId;
 
-  res.json({ success: true, data: { ...rows[0], responses } });
+  let canViewResponses = isRequester || isAdmin;
+  if (!canViewResponses && viewerUserId !== null) {
+    const { rows: responderRows } = await pool.query(
+      `SELECT 1 FROM community_responses WHERE request_id = $1 AND user_id = $2 LIMIT 1`,
+      [id, viewerUserId]
+    );
+    canViewResponses = responderRows.length > 0;
+  }
+
+  let responses: unknown[] = [];
+  if (canViewResponses) {
+    const { rows: responseRows } = await pool.query(
+      `SELECT r.id, r.message, r.file_url, r.file_size, r.created_at,
+              u.nickname as responder_nickname
+       FROM community_responses r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.request_id = $1
+       ORDER BY r.created_at`,
+      [id]
+    );
+    responses = responseRows;
+  } else {
+    // 권한 없는 경우: 응답 개수만 별도로 카운트 (UI에 "n개의 답변이 있습니다" 표시용)
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int as count FROM community_responses WHERE request_id = $1`,
+      [id]
+    );
+    request.response_count = countRows[0].count;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      ...request,
+      responses,
+      can_view_responses: canViewResponses,
+    },
+  });
 }
 
 export async function createRequest(req: AuthRequest, res: Response): Promise<void> {

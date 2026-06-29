@@ -73,12 +73,28 @@ async function sendVerificationEmailWithTimeout(email: string, token: string): P
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, nickname, region, countryCode } = req.body;
+  const { email, password, nickname, region, countryCode, consents } = req.body;
 
   if (!email || !password) {
     res.status(400).json({ success: false, message: '이메일과 비밀번호를 입력해주세요.' });
     return;
   }
+
+  // ── 개인정보 동의 검증 (PIPA §22: 필수 동의 항목 확인) ──
+  // 하위 호환: consents가 없는 옛 클라이언트는 거부 (가입 시점부터 동의 필수)
+  const c = (consents && typeof consents === 'object') ? consents : {};
+  if (!c.terms || !c.privacy) {
+    res.status(400).json({
+      success: false,
+      message: '이용약관 및 개인정보 수집·이용 동의는 필수입니다.',
+      code: 'CONSENT_REQUIRED',
+    });
+    return;
+  }
+  const now = new Date();
+  const consentTermsAt = c.terms ? now : null;
+  const consentPrivacyAt = c.privacy ? now : null;
+  const consentMarketingAt = c.marketing ? now : null;
   const VALID_REGIONS = ['seoul','busan','daegu','incheon','gwangju','daejeon','ulsan',
     'sejong','gyeonggi','gangwon','chungbuk','chungnam','jeonbuk','jeonnam',
     'gyeongbuk','gyeongnam','jeju'];
@@ -122,9 +138,13 @@ export async function register(req: Request, res: Response): Promise<void> {
   const finalCountryCode = finalCountry || geo?.countryCode || null;
   const regionIp = region ? null : (geo?.region || null); // 사용자가 명시 선택하면 IP 추정값 무시
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, nickname, region, region_ip, country_code)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [email.toLowerCase(), hash, nickname || null, region || null, regionIp, finalCountryCode]
+    `INSERT INTO users (email, password_hash, nickname, region, region_ip, country_code,
+       consent_terms_at, consent_privacy_at, consent_marketing_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [
+      email.toLowerCase(), hash, nickname || null, region || null, regionIp, finalCountryCode,
+      consentTermsAt, consentPrivacyAt, consentMarketingAt,
+    ]
   );
   const userId = rows[0].id;
 

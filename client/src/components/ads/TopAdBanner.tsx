@@ -3,7 +3,11 @@ import bidvibeLogo from '../../assets/bidvibe-logo.svg';
 import { getLang } from '../../i18n/translate';
 
 const CTA_U    = 'https://ai-traffic.kr';
-const MSG_KO   = '연구자 비용 0원, 엑셀로 공급사 그만 찾기';
+const MSG_KO   = (
+  <>
+    연구자 비용 0원,<br className="sm:hidden" /> 엑셀로 공급사 그만 찾기
+  </>
+);
 const MSG_EN   = 'Researchers private. Quotes public. Suppliers confidential.';
 const CTA_KO   = '지금 등록 →';
 const CTA_EN   = 'Sign up now →';
@@ -59,9 +63,9 @@ export default function TopAdBanner() {
         {isEn ? LABEL_EN : LABEL_KO}
       </span>
 
-      {/* 메시지 — flex-1로 공간 채우되 overflow 시 말줄임 */}
+      {/* 메시지 — 모바일은 2줄, 데스크탑은 1줄. truncate 제거하고 wrap 허용 */}
       <span
-        className="font-semibold break-keep truncate flex-1 min-w-0"
+        className="font-semibold break-keep whitespace-normal flex-1 min-w-0 leading-tight"
         style={{ color: '#132B43', fontSize: 'clamp(0.7rem, 2.8vw, 0.9375rem)' }}
       >
         {isEn ? MSG_EN : MSG_KO}

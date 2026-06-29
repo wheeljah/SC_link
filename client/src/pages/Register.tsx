@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { CONSENT_CLAUSES, emptyConsents, isRequiredConsentsValid, type ConsentKey } from '../constants/consentText';
 
 const REGIONS = [
   { value: 'seoul',    label: '서울특별시' },
@@ -97,6 +98,8 @@ export default function Register() {
     email: '', password: '', confirmPassword: '', nickname: '',
     countryCode: '', region: '',
   });
+  const [consents, setConsents] = useState(emptyConsents());
+  const [openConsent, setOpenConsent] = useState<ConsentKey | null>(null);
   const [geoDetecting, setGeoDetecting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -154,6 +157,11 @@ export default function Register() {
       setError('한국 사용자는 행정구역을 선택해주세요.');
       return;
     }
+    // 필수 동의 검증 (이용약관 + 개인정보 수집·이용)
+    if (!isRequiredConsentsValid(consents)) {
+      setError('필수 동의 항목(이용약관, 개인정보 수집·이용)에 체크해주세요.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await api.post('/auth/register', {
@@ -162,6 +170,11 @@ export default function Register() {
         nickname: form.nickname || undefined,
         countryCode: form.countryCode,
         region: form.countryCode === 'KR' ? form.region : undefined,
+        consents: {
+          terms: consents.terms,
+          privacy: consents.privacy,
+          marketing: consents.marketing,
+        },
       });
       setDevMode(!!res.data.devMode);
       setServerMsg(res.data.message || '');
@@ -331,6 +344,62 @@ export default function Register() {
               </select>
             </div>
           )}
+
+          {/* ── 개인정보 동의 (PIPA 준수) ── */}
+          <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/40">
+            <div className="px-3 py-2 border-b border-slate-200 bg-white">
+              <p className="text-xs font-semibold text-slate-600">
+                🔒 개인정보 수집 및 이용 동의 <span className="text-slate-400 font-normal">(필수 항목 체크 후 가입 가능)</span>
+              </p>
+            </div>
+            {CONSENT_CLAUSES.map((c, idx) => {
+              const isOpen = openConsent === c.key;
+              return (
+                <div
+                  key={c.key}
+                  className={idx > 0 ? 'border-t border-slate-200 bg-white' : 'bg-white'}
+                >
+                  <div className="flex items-start gap-2.5 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      id={`consent-${c.key}`}
+                      checked={consents[c.key]}
+                      onChange={(e) => setConsents(prev => ({ ...prev, [c.key]: e.target.checked }))}
+                      className="mt-0.5 w-4 h-4 text-teal-600 border-slate-300 rounded focus:ring-teal-500 shrink-0"
+                    />
+                    <label htmlFor={`consent-${c.key}`} className="flex-1 cursor-pointer select-none">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                          c.required
+                            ? 'bg-red-50 text-red-600 border border-red-200'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {c.required ? '필수' : '선택'}
+                        </span>
+                        <span className="text-sm font-medium text-slate-800">{c.title}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-snug">{c.summary}</p>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOpenConsent(isOpen ? null : c.key)}
+                      className="text-xs text-teal-600 hover:text-teal-700 hover:underline whitespace-nowrap shrink-0 mt-0.5"
+                      aria-expanded={isOpen}
+                    >
+                      {isOpen ? '접기 ▲' : '펼치기 ▼'}
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <div className="px-3 pb-3 ml-7">
+                      <div className="text-xs text-slate-600 bg-slate-50 rounded-md p-3 max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-slate-200">
+                        {c.details}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">

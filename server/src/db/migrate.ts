@@ -14,8 +14,17 @@ CREATE TABLE IF NOT EXISTS users (
   tier VARCHAR(50) DEFAULT 'free',
   download_count INTEGER DEFAULT 0,
   last_login_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  -- 개인정보 동의 시각 (PIPA §22 증빙). NULL이면 동의 안 받음.
+  consent_terms_at TIMESTAMP,
+  consent_privacy_at TIMESTAMP,
+  consent_marketing_at TIMESTAMP
 );
+
+-- 기존 테이블 마이그레이션 (이미 users 테이블이 있는 경우 대비)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_terms_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_privacy_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_marketing_at TIMESTAMP;
 
 -- 이메일 인증 토큰
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
