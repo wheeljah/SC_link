@@ -12,11 +12,21 @@ import cron from 'node-cron';
 import { pool } from '../db/pool';
 import { kistiRssAdapter } from './jobSources/kistiRssAdapter';
 import { kaistCheerioAdapter } from './jobSources/kaistCheerioAdapter';
+import { snuCheerioAdapter } from './jobSources/snuCheerioAdapter';
+import { pusanCheerioAdapter } from './jobSources/pusanCheerioAdapter';
+import { knuCheerioAdapter } from './jobSources/knuCheerioAdapter';
+import { unistCheerioAdapter } from './jobSources/unistCheerioAdapter';
+import { jejunuCheerioAdapter } from './jobSources/jejunuCheerioAdapter';
 import { JobSourceAdapter } from './jobSources/types';
 
 const ADAPTERS: Record<string, JobSourceAdapter> = {
   'kisti-rss': kistiRssAdapter,
   'kaist-cheerio': kaistCheerioAdapter,
+  'snu-cheerio': snuCheerioAdapter,
+  'pusan-cheerio': pusanCheerioAdapter,
+  'knu-cheerio': knuCheerioAdapter,
+  'unist-cheerio': unistCheerioAdapter,
+  'jejunu-cheerio': jejunuCheerioAdapter,
 };
 
 interface CrawlResult {
