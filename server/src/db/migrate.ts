@@ -393,18 +393,23 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   )`, params: [] },
   { sql: `CREATE INDEX IF NOT EXISTS idx_foreign_interest_notified ON foreign_interest_signup(notified_at)`, params: [] },
 
-  // 초기 시드 — KISTI RSS + KAIST Cheerio + 5개 국립대 채용 (2026-07-02 추가)
+  // 초기 시드 — KISTI RSS + KAIST Cheerio + 5개 국립대 채용 + 산학협력단 + 국책연구기관 (2026-07-02 추가)
   // cron 분산: KAIST=04:00·16:00, 서울대=05:00·17:00, 부산대=06:00·18:00,
   //            경북대=07:00·19:00, UNIST=08:00·20:00, 제주대=09:00·21:00 (KST)
+  //            W3 신규: 서울대RND=10·22, 경북대RND=11·23, KIST=12·00, IBS=13·01 (KST)
   { sql: `INSERT INTO job_sources (code, name, base_url, crawl_method, cron_expr, robots_txt_url, rate_limit_ms, region, enabled)
    VALUES
-     ('kisti-rss',     'KISTI RSS',        'https://www.kisti.re.kr',                            'rss',     '0 3,15 * * *', 'https://www.kisti.re.kr/robots.txt',     3000, 'kr', TRUE),
-     ('kaist-cheerio', 'KAIST 채용/초빙',   'https://www.kaist.ac.kr/kr/html/footer/0814.html',  'cheerio', '0 4,16 * * *', 'https://www.kaist.ac.kr/robots.txt',    4000, 'kr', TRUE),
-     ('snu-cheerio',   '서울대 채용공지',   'https://www.snu.ac.kr/snunow/notice/job-openings',  'cheerio', '0 5,17 * * *', NULL,                                  4000, 'kr', TRUE),
-     ('pusan-cheerio', '부산대 채용',       'https://www.pusan.ac.kr/kor/CMS/Board/Board.do?mCode=MN103', 'cheerio', '0 6,18 * * *', NULL,                       4000, 'kr', TRUE),
-     ('knu-cheerio',   '경북대 채용',       'https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=8&menu_idx=220', 'cheerio', '0 7,19 * * *', NULL,    4000, 'kr', TRUE),
-     ('unist-cheerio', 'UNIST 채용공고',   'http://www.unist.ac.kr/unist/etc/notification/employment.do', 'cheerio', '0 8,20 * * *', 'http://www.unist.ac.kr/robots.txt',     4000, 'kr', TRUE),
-     ('jejunu-cheerio','제주대 채용',       'https://www.jejunu.ac.kr/ara/noticesurvey/recruit.htm', 'cheerio', '0 9,21 * * *', 'https://www.jejunu.ac.kr/robots.txt',    4000, 'kr', TRUE)
+     ('kisti-rss',        'KISTI RSS',              'https://www.kisti.re.kr',                            'rss',     '0 3,15 * * *',  'https://www.kisti.re.kr/robots.txt',     3000, 'kr', TRUE),
+     ('kaist-cheerio',    'KAIST 채용/초빙',         'https://www.kaist.ac.kr/kr/html/footer/0814.html',  'cheerio', '0 4,16 * * *',  'https://www.kaist.ac.kr/robots.txt',    4000, 'kr', TRUE),
+     ('snu-cheerio',      '서울대 채용공지',         'https://www.snu.ac.kr/snunow/notice/job-openings',  'cheerio', '0 5,17 * * *',  NULL,                                  4000, 'kr', TRUE),
+     ('pusan-cheerio',    '부산대 채용',             'https://www.pusan.ac.kr/kor/CMS/Board/Board.do?mCode=MN103', 'cheerio', '0 6,18 * * *', NULL,                       4000, 'kr', TRUE),
+     ('knu-cheerio',      '경북대 채용',             'https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=8&menu_idx=220', 'cheerio', '0 7,19 * * *', NULL,    4000, 'kr', TRUE),
+     ('unist-cheerio',    'UNIST 채용공고',         'http://www.unist.ac.kr/unist/etc/notification/employment.do', 'cheerio', '0 8,20 * * *', 'http://www.unist.ac.kr/robots.txt',     4000, 'kr', TRUE),
+     ('jejunu-cheerio',   '제주대 채용',             'https://www.jejunu.ac.kr/ara/noticesurvey/recruit.htm', 'cheerio', '0 9,21 * * *', 'https://www.jejunu.ac.kr/robots.txt',    4000, 'kr', TRUE),
+     ('snu-rnd-cheerio',  '서울대 산학협력단 채용',  'https://snurnd.snu.ac.kr/board/recruit',            'cheerio', '0 10,22 * * *', NULL,                                  4000, 'kr', TRUE),
+     ('knu-rnd-cheerio',  '경북대 산학협력단 채용',  'https://iac.knu.ac.kr/Employment?menuId=MENU_0000000334', 'cheerio', '0 11,23 * * *', NULL,                       4000, 'kr', TRUE),
+     ('kist-cheerio',     'KIST 채용공고',           'https://www.kist.re.kr/ko/notice/employment-announcement.do', 'cheerio', '0 12,0 * * *', 'https://www.kist.re.kr/robots.txt', 4000, 'kr', TRUE),
+     ('ibs-cheerio',      'IBS 채용공고',           'https://www.ibs.re.kr/prog/recruit/kor/sub04_01/list.do', 'cheerio', '0 13,1 * * *', 'https://www.ibs.re.kr/robots.txt',  4000, 'kr', TRUE)
    ON CONFLICT (code) DO NOTHING`, params: [] },
 ];
 

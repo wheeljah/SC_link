@@ -13,20 +13,28 @@ import { pool } from '../db/pool';
 import { kistiRssAdapter } from './jobSources/kistiRssAdapter';
 import { kaistCheerioAdapter } from './jobSources/kaistCheerioAdapter';
 import { snuCheerioAdapter } from './jobSources/snuCheerioAdapter';
+import { snuRndCheerioAdapter } from './jobSources/snuRndCheerioAdapter';
 import { pusanCheerioAdapter } from './jobSources/pusanCheerioAdapter';
 import { knuCheerioAdapter } from './jobSources/knuCheerioAdapter';
+import { knuRndCheerioAdapter } from './jobSources/knuRndCheerioAdapter';
 import { unistCheerioAdapter } from './jobSources/unistCheerioAdapter';
 import { jejunuCheerioAdapter } from './jobSources/jejunuCheerioAdapter';
+import { kistCheerioAdapter } from './jobSources/kistCheerioAdapter';
+import { ibsCheerioAdapter } from './jobSources/ibsCheerioAdapter';
 import { JobSourceAdapter } from './jobSources/types';
 
 const ADAPTERS: Record<string, JobSourceAdapter> = {
   'kisti-rss': kistiRssAdapter,
   'kaist-cheerio': kaistCheerioAdapter,
   'snu-cheerio': snuCheerioAdapter,
+  'snu-rnd-cheerio': snuRndCheerioAdapter,
   'pusan-cheerio': pusanCheerioAdapter,
   'knu-cheerio': knuCheerioAdapter,
+  'knu-rnd-cheerio': knuRndCheerioAdapter,
   'unist-cheerio': unistCheerioAdapter,
   'jejunu-cheerio': jejunuCheerioAdapter,
+  'kist-cheerio': kistCheerioAdapter,
+  'ibs-cheerio': ibsCheerioAdapter,
 };
 
 interface CrawlResult {
