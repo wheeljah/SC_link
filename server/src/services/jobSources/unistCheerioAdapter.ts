@@ -19,14 +19,30 @@ export const unistCheerioAdapter: JobSourceAdapter = {
   region: 'kr',
 
   async fetchList(): Promise<RawJobItem[]> {
-    const { data: html } = await axios.get<string>(LIST_URL, {
-      timeout: 20000,
-      responseType: 'text',
-      headers: {
-        'User-Agent': 'ScholarLinkBot/1.0 (+https://wheeljah.github.io/SC_link)',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-      },
-    });
+    // UNIST 서버가 Render IP에서 연결을 자주 끊음 → retry 1회 + 좀 더 일반적인 UA
+    let html: string | null = null;
+    let lastErr: Error | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const r = await axios.get<string>(LIST_URL, {
+          timeout: 25000,
+          responseType: 'text',
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml',
+          },
+        });
+        html = r.data;
+        break;
+      } catch (e) {
+        lastErr = e as Error;
+        if (attempt === 2) throw lastErr;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    if (!html) throw lastErr || new Error('UNIST fetch failed');
 
     const $ = cheerio.load(html);
     const items: RawJobItem[] = [];
