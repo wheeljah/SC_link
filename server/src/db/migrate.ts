@@ -280,9 +280,6 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code VARCHAR(2) DEFAULT NULL`, params: [] },
   { sql: `CREATE INDEX IF NOT EXISTS idx_users_country ON users(country_code)`, params: [] },
 
-  // 🎓 커리어 — NRF 영구 제외 (2026-07-02: robots.txt Disallow: /)
-  { sql: `UPDATE job_sources SET enabled = FALSE, last_error = 'excluded: robots.txt Disallow: /' WHERE code = 'nrf-cheerio'`, params: [] },
-
   // ─────────────────────────────────────────────────────────────────────
   // 🎓 커리어 (대학원·연구원 모집공고) — 2026-07-02 추가
   // ─────────────────────────────────────────────────────────────────────
@@ -409,8 +406,15 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
      ('snu-rnd-cheerio',  '서울대 산학협력단 채용',  'https://snurnd.snu.ac.kr/board/recruit',            'cheerio', '0 10,22 * * *', NULL,                                  4000, 'kr', TRUE),
      ('knu-rnd-cheerio',  '경북대 산학협력단 채용',  'https://iac.knu.ac.kr/Employment?menuId=MENU_0000000334', 'cheerio', '0 11,23 * * *', NULL,                       4000, 'kr', TRUE),
      ('kist-cheerio',     'KIST 채용공고',           'https://www.kist.re.kr/ko/notice/employment-announcement.do', 'cheerio', '0 12,0 * * *', 'https://www.kist.re.kr/robots.txt', 4000, 'kr', TRUE),
-     ('ibs-cheerio',      'IBS 채용공고',           'https://www.ibs.re.kr/prog/recruit/kor/sub04_01/list.do', 'cheerio', '0 13,1 * * *', 'https://www.ibs.re.kr/robots.txt',  4000, 'kr', TRUE)
+     ('ibs-cheerio',      'IBS 채용공고',           'https://www.ibs.re.kr/prog/recruit/kor/sub04_01/list.do', 'cheerio', '0 13,1 * * *', 'https://www.ibs.re.kr/robots.txt',  4000, 'kr', TRUE),
+     ('yonsei-rnd-cheerio',     '연세대 산학협력단 채용',     'https://research.yonsei.ac.kr/research/service/recruit.do', 'cheerio', '0 14,2 * * *', NULL,                                  4000, 'kr', TRUE),
+     ('yonsei-faculty-cheerio', '연세대 전임교원 초빙',     'https://faculty.yonsei.ac.kr/recruit/index.php?lang=ko', 'cheerio', '0 15,3 * * *', NULL,                                  4000, 'kr', TRUE),
+     ('worknet-openapi',        '워크넷 Open API (data.go.kr)', 'https://apis.data.go.kr/B552474/SmJobRecruitInfo/getSmJobRecruitList', 'openapi', '0 16,4 * * *', NULL,                              3000, 'kr', FALSE)
    ON CONFLICT (code) DO NOTHING`, params: [] },
+
+  // 🎓 커리어 — NRF 영구 제외 (2026-07-02: robots.txt Disallow: /)
+  // CREATE TABLE job_sources + INSERT 시드 뒤에 와야 안전 (이전 버전은 silent fail)
+  { sql: `UPDATE job_sources SET enabled = FALSE, last_error = 'excluded: robots.txt Disallow: /' WHERE code = 'nrf-cheerio'`, params: [] },
 ];
 
 export async function migrate(): Promise<void> {

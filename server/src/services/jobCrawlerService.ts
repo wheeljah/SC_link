@@ -21,6 +21,9 @@ import { unistCheerioAdapter } from './jobSources/unistCheerioAdapter';
 import { jejunuCheerioAdapter } from './jobSources/jejunuCheerioAdapter';
 import { kistCheerioAdapter } from './jobSources/kistCheerioAdapter';
 import { ibsCheerioAdapter } from './jobSources/ibsCheerioAdapter';
+import { yonseiRndCheerioAdapter } from './jobSources/yonseiRndCheerioAdapter';
+import { yonseiFacultyCheerioAdapter } from './jobSources/yonseiFacultyCheerioAdapter';
+import { worknetOpenApiAdapter } from './jobSources/worknetOpenApiAdapter';
 import { JobSourceAdapter } from './jobSources/types';
 
 const ADAPTERS: Record<string, JobSourceAdapter> = {
@@ -35,6 +38,9 @@ const ADAPTERS: Record<string, JobSourceAdapter> = {
   'jejunu-cheerio': jejunuCheerioAdapter,
   'kist-cheerio': kistCheerioAdapter,
   'ibs-cheerio': ibsCheerioAdapter,
+  'yonsei-rnd-cheerio': yonseiRndCheerioAdapter,
+  'yonsei-faculty-cheerio': yonseiFacultyCheerioAdapter,
+  'worknet-openapi': worknetOpenApiAdapter,
 };
 
 interface CrawlResult {
