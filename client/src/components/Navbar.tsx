@@ -29,6 +29,7 @@ export default function Navbar() {
 
           {isAdmin && <Link to="/servers" className={link}>서버 상태</Link>}
           <Link to="/community" className={link}>커뮤니티</Link>
+          <Link to="/jobs" className={link}>🎓 커리어</Link>
           <Link to="/report" className={link}>에러 보고</Link>
 
           {isLoggedIn ? (

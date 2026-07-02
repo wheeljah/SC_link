@@ -18,6 +18,8 @@ import BugReport from './pages/BugReport';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import CitationNetworkPage from './pages/CitationNetworkPage';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { isAdminUser } from './constants/auth';
 
@@ -48,6 +50,8 @@ function Layout() {
           <Route path="/servers" element={<AdminRoute><Servers /></AdminRoute>} />
           <Route path="/community" element={<Community />} />
           <Route path="/community/:id" element={<CommunityDetail />} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/community/new" element={
             <PrivateRoute><CommunityNew /></PrivateRoute>
           } />

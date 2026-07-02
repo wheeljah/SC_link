@@ -177,7 +177,7 @@ export default function Admin() {
             { label: '총 가입자',       value: stats.user_count.toLocaleString() + '명',   sub: `+${stats.new_users_7d}명 (7일)` },
             { label: '총 다운로드',     value: stats.download_count.toLocaleString() + '건', sub: `+${stats.downloads_7d}건 (7일)` },
             { label: '에러 보고',       value: stats.bug_count.toLocaleString() + '건',    sub: '' },
-            { label: 'DB 사용량',       value: stats.db_size,                               sub: 'Render 무료: 1GB / 90일' },
+            { label: 'DB 사용량',       value: stats.db_size,                               sub: 'Neon 무료: 512MB' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <p className="text-xs text-slate-500">{label}</p>

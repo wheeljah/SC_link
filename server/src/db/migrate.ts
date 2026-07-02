@@ -279,6 +279,123 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   // 국가 코드 (ISO 3166-1 alpha-2) — 외국인 가입 허용 (2026-06-28 추가)
   { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code VARCHAR(2) DEFAULT NULL`, params: [] },
   { sql: `CREATE INDEX IF NOT EXISTS idx_users_country ON users(country_code)`, params: [] },
+
+  // ─────────────────────────────────────────────────────────────────────
+  // 🎓 커리어 (대학원·연구원 모집공고) — 2026-07-02 추가
+  // ─────────────────────────────────────────────────────────────────────
+
+  // 소스 정의 (어떤 사이트를 어디서 어떻게 가져오는지)
+  { sql: `CREATE TABLE IF NOT EXISTS job_sources (
+    id              SERIAL PRIMARY KEY,
+    code            VARCHAR(50) UNIQUE NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    base_url        TEXT NOT NULL,
+    crawl_method    VARCHAR(20) NOT NULL,
+    cron_expr       VARCHAR(50) DEFAULT '0 */12 * * *',
+    enabled         BOOLEAN DEFAULT TRUE,
+    robots_txt_url  TEXT,
+    last_crawled_at TIMESTAMP,
+    last_status     VARCHAR(20),
+    last_error      TEXT,
+    rate_limit_ms   INTEGER DEFAULT 3000,
+    region          VARCHAR(10) DEFAULT 'kr',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_sources_enabled ON job_sources(enabled)`, params: [] },
+
+  // 정규화된 공고 (source별 unique 제약)
+  { sql: `CREATE TABLE IF NOT EXISTS job_postings (
+    id                SERIAL PRIMARY KEY,
+    source_id         INTEGER REFERENCES job_sources(id) ON DELETE CASCADE,
+    external_id       VARCHAR(255) NOT NULL,
+    canonical_url     TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    organization      VARCHAR(255),
+    category          VARCHAR(30),
+    fields            TEXT[],
+    deadline          TIMESTAMP,
+    posted_at         TIMESTAMP,
+    summary           TEXT,
+    description_html  TEXT,
+    description_hash  VARCHAR(64),
+    language          VARCHAR(10) DEFAULT 'ko',
+    region            VARCHAR(10) DEFAULT 'kr',
+    is_active         BOOLEAN DEFAULT TRUE,
+    is_removed        BOOLEAN DEFAULT FALSE,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (source_id, external_id)
+  )`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_deadline ON job_postings(deadline) WHERE is_active = TRUE`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_category ON job_postings(category)`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_active   ON job_postings(is_active) WHERE is_active = TRUE`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_fields   ON job_postings USING GIN (fields)`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_search   ON job_postings USING GIN (to_tsvector('simple', title || ' ' || COALESCE(organization, '')))`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_postings_region   ON job_postings(region)`, params: [] },
+
+  // 사용자 키워드 구독
+  { sql: `CREATE TABLE IF NOT EXISTS job_subscriptions (
+    id            SERIAL PRIMARY KEY,
+    user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    keywords      TEXT[] NOT NULL,
+    categories    TEXT[],
+    notify_email  BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_subs_user ON job_subscriptions(user_id)`, params: [] },
+
+  // 스크랩
+  { sql: `CREATE TABLE IF NOT EXISTS job_bookmarks (
+    user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    job_id     INTEGER REFERENCES job_postings(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, job_id)
+  )`, params: [] },
+
+  // 삭제 요청 (DMCA / 권리자 대응)
+  { sql: `CREATE TABLE IF NOT EXISTS job_removal_requests (
+    id              SERIAL PRIMARY KEY,
+    source_id       INTEGER REFERENCES job_sources(id),
+    external_id     VARCHAR(255),
+    requester_email VARCHAR(255) NOT NULL,
+    reason          TEXT,
+    status          VARCHAR(20) DEFAULT 'pending',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at    TIMESTAMP
+  )`, params: [] },
+
+  // 크롤러 실행 로그
+  { sql: `CREATE TABLE IF NOT EXISTS job_crawl_logs (
+    id            SERIAL PRIMARY KEY,
+    source_id     INTEGER REFERENCES job_sources(id) ON DELETE CASCADE,
+    started_at    TIMESTAMP NOT NULL,
+    finished_at   TIMESTAMP,
+    items_new     INTEGER DEFAULT 0,
+    items_updated INTEGER DEFAULT 0,
+    items_skipped INTEGER DEFAULT 0,
+    status        VARCHAR(20),
+    error         TEXT
+  )`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_job_crawl_logs_source ON job_crawl_logs(source_id, started_at DESC)`, params: [] },
+
+  // 해외 공고 출시 알림 구독자 (비로그인 가능)
+  { sql: `CREATE TABLE IF NOT EXISTS foreign_interest_signup (
+    id              SERIAL PRIMARY KEY,
+    email           VARCHAR(255) NOT NULL UNIQUE,
+    fields          TEXT[],
+    source          VARCHAR(50) DEFAULT 'web',
+    notified_at     TIMESTAMP,
+    unsubscribed_at TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`, params: [] },
+  { sql: `CREATE INDEX IF NOT EXISTS idx_foreign_interest_notified ON foreign_interest_signup(notified_at)`, params: [] },
+
+  // 초기 시드 — KISTI RSS + NRF Cheerio (W1 MVP)
+  { sql: `INSERT INTO job_sources (code, name, base_url, crawl_method, cron_expr, robots_txt_url, rate_limit_ms, region, enabled)
+   VALUES
+     ('kisti-rss',   'KISTI RSS',         'https://www.kisti.re.kr',                 'rss',      '0 3,15 * * *',  'https://www.kisti.re.kr/robots.txt', 3000, 'kr', TRUE),
+     ('nrf-cheerio', '한국연구재단 채용', 'https://www.nrf.re.kr/cms/board/general', 'cheerio',  '0 4,16 * * *',  'https://www.nrf.re.kr/robots.txt',    4000, 'kr', TRUE)
+   ON CONFLICT (code) DO NOTHING`, params: [] },
 ];
 
 export async function migrate(): Promise<void> {

@@ -23,6 +23,8 @@ import adRoutes from './routes/ads';
 import reportRoutes from './routes/reports';
 import adminRoutes from './routes/admin';
 import citationRoutes from './routes/citations';
+import jobsRoutes from './routes/jobs';
+import { initCrawlerCron } from './services/jobCrawlerService';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000');
@@ -80,6 +82,7 @@ app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/ads', adRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/citations', citationRoutes);
+app.use('/api/v1/jobs', jobsRoutes);
 app.use('/api/v1/admin',   adminRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -100,6 +103,13 @@ app.listen(PORT, () => {
       console.warn('[migrate] skipped:', (e as Error).message);
     } finally {
       clearTimeout(timer);
+    }
+
+    // 🎓 커리어 크롤러 cron 등록 (KISTI / NRF 자동 수집)
+    try {
+      initCrawlerCron();
+    } catch (e) {
+      console.warn('[crawler] init skipped:', (e as Error).message);
     }
   })();
 });

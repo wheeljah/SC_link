@@ -72,3 +72,54 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// ── 🎓 커리어 API (W1) ───────────────────────────────────────────────────
+export type JobCategory = 'graduate' | 'postdoc' | 'researcher' | 'professor' | 'staff';
+
+export interface JobItem {
+  id: number;
+  title: string;
+  organization: string | null;
+  category: JobCategory | null;
+  fields: string[] | null;
+  deadline: string | null;
+  posted_at: string | null;
+  canonical_url: string;
+  region: 'kr' | 'global';
+  language: string | null;
+  source_code: string;
+  source_name: string;
+  days_left: number | null;
+  created_at: string;
+}
+
+export async function fetchJobs(params: {
+  keyword?: string;
+  category?: JobCategory | '';
+  region?: 'kr' | 'global';
+  page?: number;
+  limit?: number;
+  deadline_within?: number;
+} = {}): Promise<{ items: JobItem[]; total: number; page: number; limit: number }> {
+  const res = await api.get('/jobs', { params });
+  return res.data;
+}
+
+export async function fetchJob(id: number): Promise<JobItem & { summary: string; description_html: string }> {
+  const res = await api.get(`/jobs/${id}`);
+  return res.data.data;
+}
+
+export async function fetchJobSources(): Promise<Array<{
+  id: number; code: string; name: string; crawl_method: string; cron_expr: string;
+  enabled: boolean; last_crawled_at: string | null; last_status: string | null;
+  region: string; rate_limit_ms: number;
+}>> {
+  const res = await api.get('/jobs/sources');
+  return res.data.items;
+}
+
+export async function subscribeForeignInterest(email: string, fields: string[] = []): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/jobs/foreign-interest', { email, fields });
+  return res.data;
+}
