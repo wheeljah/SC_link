@@ -19,3 +19,44 @@ _repo_body.json
 # Claude 작업 디렉토리
 .claude/
 sclink_github key_0624.txt
+
+# ── W1 정리 (2026-07-02): dev/debug 스크립트 일괄 제외 ────────────────
+# server/ 디버그·테스트 스크립트 (운영에 영향 없는 dev 흔적)
+server/_*.json
+server/_*.ps1
+server/activate_*.js
+server/add_*.js
+server/analyze_*.js
+server/check_*.js
+server/check_*.ts
+server/cobalt*
+server/debug_*.js
+server/find_*.js
+server/inspect_*.ts
+server/probe_*.js
+server/reset_*.js
+server/reverse_*.js
+server/server_log*.txt
+server/test_*.js
+server/test_*.ts
+server/src/test_*.ts
+
+# server/uploads의 dev 산출물 (PDF 임시저장, 스크린샷, 디버그 .js)
+server/uploads/scidir_*.pdf
+server/uploads/shr_*.pdf
+server/uploads/libgenli_*.png
+server/uploads/scishub_run_*.js
+
+# 루트 dev 산출물 (이메일·API·QR·문서)
+doi_hunter_report.md
+resend_api.txt
+resend_logs-*.csv
+resend_*.js
+scholarlink-qr.svg
+ScholarLink_*.docx
+RENDER_*.md
+
+# docs dev 산출물 (보고서·스크립트)
+/docs/ScholarLink_*.docx
+/docs/_generate_report.py
+# ─────────────────────────────────────────────────────────────────────
