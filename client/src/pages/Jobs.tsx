@@ -124,7 +124,7 @@ export default function Jobs() {
           {!loading && items.length === 0 && (
             <div className="bg-slate-50 border border-slate-200 text-slate-600 px-6 py-12 rounded-lg text-center">
               <p className="mb-2 text-lg">🔍 공고가 없습니다</p>
-              <p className="text-sm">아직 수집된 공고가 없거나, 다음 자동 크롤링 시각을 기다려 주세요.</p>
+              <p className="text-sm">아직 수집된 공고가 없습니다. 다음 수집 중입니다.</p>
             </div>
           )}
 
