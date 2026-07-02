@@ -371,9 +371,58 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 }
 
 /**
- * [개발 전용] SMTP 미설정 시 이메일 인증 링크를 직접 반환
- * 운영 환경(NODE_ENV=production)에서는 404 반환
+ * 비밀번호 변경 — 로그인된 사용자가 본인의 현재 비밀번호를 확인한 뒤 새 비밀번호로 교체.
+ * - 현재 비밀번호 일치 확인 (bcrypt.compare)
+ * - 새 비밀번호 정책: 영문+숫자 조합 8자 이상 (가입·재설정과 동일)
+ * - 새 비밀번호는 현재 비밀번호와 달라야 함
+ * - 변경 후 기존 토큰은 유지 (사용자가 명시적으로 로그아웃하도록 안내)
  */
+export async function changePassword(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.userId;
+  if (!userId) { res.status(401).json({ success: false, message: '인증이 필요합니다.' }); return; }
+
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ success: false, message: '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.' });
+    return;
+  }
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    res.status(400).json({ success: false, message: '잘못된 요청 형식입니다.' });
+    return;
+  }
+  if (newPassword.length < 8 || !/(?=.*[a-zA-Z])(?=.*\d)/.test(newPassword)) {
+    res.status(400).json({ success: false, message: '새 비밀번호는 영문+숫자 조합 8자 이상이어야 합니다.' });
+    return;
+  }
+  if (currentPassword === newPassword) {
+    res.status(400).json({ success: false, message: '새 비밀번호는 현재 비밀번호와 달라야 합니다.' });
+    return;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT password_hash FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) {
+    res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    return;
+  }
+  const ok = await bcrypt.compare(currentPassword, rows[0].password_hash);
+  if (!ok) {
+    res.status(401).json({ success: false, message: '현재 비밀번호가 올바르지 않습니다.' });
+    return;
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  await pool.query(
+    `UPDATE users SET password_hash = $1 WHERE id = $2`,
+    [newHash, userId]
+  );
+
+  console.log(`[auth] password changed: user_id=${userId}`);
+  res.json({ success: true, message: '비밀번호가 변경되었습니다.' });
+}
+
 export async function deleteMe(req: AuthRequest, res: Response): Promise<void> {
   const userId = req.userId;
   if (!userId) { res.status(401).json({ success: false, message: '인증이 필요합니다.' }); return; }

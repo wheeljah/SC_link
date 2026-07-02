@@ -26,6 +26,12 @@ export default function Profile() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
 
+  // 비밀번호 변경 폼
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [showPwForm, setShowPwForm] = useState(false);
+
   const isAdmin = isAdminUser(user) || profile?.is_admin === true;
 
   useEffect(() => {
@@ -45,6 +51,41 @@ export default function Profile() {
     } catch {
       setError('회원탈퇴 처리 중 오류가 발생했습니다.');
       setWithdrawing(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPwMsg(null);
+    if (!pwForm.current || !pwForm.next || !pwForm.confirm) {
+      setPwMsg({ type: 'err', text: '모든 칸을 입력해주세요.' });
+      return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setPwMsg({ type: 'err', text: '새 비밀번호 확인이 일치하지 않습니다.' });
+      return;
+    }
+    if (pwForm.next.length < 8 || !/(?=.*[a-zA-Z])(?=.*\d)/.test(pwForm.next)) {
+      setPwMsg({ type: 'err', text: '새 비밀번호는 영문+숫자 조합 8자 이상이어야 합니다.' });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      const res = await api.patch('/auth/me/password', {
+        currentPassword: pwForm.current,
+        newPassword: pwForm.next,
+      });
+      if (res.data?.success) {
+        setPwMsg({ type: 'ok', text: '비밀번호가 변경되었습니다.' });
+        setPwForm({ current: '', next: '', confirm: '' });
+        setTimeout(() => { setShowPwForm(false); setPwMsg(null); }, 2000);
+      } else {
+        setPwMsg({ type: 'err', text: res.data?.message || '변경에 실패했습니다.' });
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      setPwMsg({ type: 'err', text: err.response?.data?.message || '서버 오류가 발생했습니다.' });
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -87,6 +128,69 @@ export default function Profile() {
       >
         돌아가기
       </button>
+
+      {/* 비밀번호 변경 섹션 */}
+      <div className="border border-slate-200 rounded-2xl p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-800">비밀번호 변경</h2>
+        {!showPwForm ? (
+          <button
+            onClick={() => { setShowPwForm(true); setPwMsg(null); }}
+            className="text-sm text-brand-700 hover:text-brand-800 underline"
+          >
+            비밀번호 변경하기
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">
+              현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다. 영문+숫자 조합 8자 이상.
+            </p>
+            <input
+              type="password"
+              value={pwForm.current}
+              onChange={e => setPwForm(v => ({ ...v, current: e.target.value }))}
+              placeholder="현재 비밀번호"
+              autoComplete="current-password"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <input
+              type="password"
+              value={pwForm.next}
+              onChange={e => setPwForm(v => ({ ...v, next: e.target.value }))}
+              placeholder="새 비밀번호 (영문+숫자 8자 이상)"
+              autoComplete="new-password"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <input
+              type="password"
+              value={pwForm.confirm}
+              onChange={e => setPwForm(v => ({ ...v, confirm: e.target.value }))}
+              placeholder="새 비밀번호 확인"
+              autoComplete="new-password"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {pwMsg && (
+              <p className={`text-xs ${pwMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+                {pwMsg.text}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowPwForm(false); setPwForm({ current: '', next: '', confirm: '' }); setPwMsg(null); }}
+                className="flex-1 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={pwSaving}
+                className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white text-sm font-semibold transition-colors"
+              >
+                {pwSaving ? '변경 중...' : '변경 확인'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 회원탈퇴 섹션 */}
       <div className="border border-red-100 rounded-2xl p-5 space-y-3">
