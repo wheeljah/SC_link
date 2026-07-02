@@ -280,6 +280,9 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   { sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code VARCHAR(2) DEFAULT NULL`, params: [] },
   { sql: `CREATE INDEX IF NOT EXISTS idx_users_country ON users(country_code)`, params: [] },
 
+  // 🎓 커리어 — NRF 영구 제외 (2026-07-02: robots.txt Disallow: /)
+  { sql: `UPDATE job_sources SET enabled = FALSE, last_error = 'excluded: robots.txt Disallow: /' WHERE code = 'nrf-cheerio'`, params: [] },
+
   // ─────────────────────────────────────────────────────────────────────
   // 🎓 커리어 (대학원·연구원 모집공고) — 2026-07-02 추가
   // ─────────────────────────────────────────────────────────────────────
@@ -390,11 +393,11 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   )`, params: [] },
   { sql: `CREATE INDEX IF NOT EXISTS idx_foreign_interest_notified ON foreign_interest_signup(notified_at)`, params: [] },
 
-  // 초기 시드 — KISTI RSS + NRF Cheerio (W1 MVP)
+  // 초기 시드 — KISTI RSS + KAIST Cheerio (W1 MVP, 2026-07-02 NRF 제외: robots.txt Disallow: /)
   { sql: `INSERT INTO job_sources (code, name, base_url, crawl_method, cron_expr, robots_txt_url, rate_limit_ms, region, enabled)
    VALUES
-     ('kisti-rss',   'KISTI RSS',         'https://www.kisti.re.kr',                 'rss',      '0 3,15 * * *',  'https://www.kisti.re.kr/robots.txt', 3000, 'kr', TRUE),
-     ('nrf-cheerio', '한국연구재단 채용', 'https://www.nrf.re.kr/cms/board/general', 'cheerio',  '0 4,16 * * *',  'https://www.nrf.re.kr/robots.txt',    4000, 'kr', TRUE)
+     ('kisti-rss',     'KISTI RSS',      'https://www.kisti.re.kr',                          'rss',     '0 3,15 * * *',  'https://www.kisti.re.kr/robots.txt', 3000, 'kr', TRUE),
+     ('kaist-cheerio', 'KAIST 채용/초빙', 'https://www.kaist.ac.kr/kr/html/footer/0814.html', 'cheerio', '0 4,16 * * *',  'https://www.kaist.ac.kr/robots.txt', 4000, 'kr', TRUE)
    ON CONFLICT (code) DO NOTHING`, params: [] },
 ];
 

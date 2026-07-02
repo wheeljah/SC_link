@@ -11,12 +11,12 @@ import { createHash } from 'crypto';
 import cron from 'node-cron';
 import { pool } from '../db/pool';
 import { kistiRssAdapter } from './jobSources/kistiRssAdapter';
-import { nrfCheerioAdapter } from './jobSources/nrfCheerioAdapter';
+import { kaistCheerioAdapter } from './jobSources/kaistCheerioAdapter';
 import { JobSourceAdapter } from './jobSources/types';
 
 const ADAPTERS: Record<string, JobSourceAdapter> = {
   'kisti-rss': kistiRssAdapter,
-  'nrf-cheerio': nrfCheerioAdapter,
+  'kaist-cheerio': kaistCheerioAdapter,
 };
 
 interface CrawlResult {
