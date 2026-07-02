@@ -11,6 +11,18 @@ export async function listServers(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data: rows, lastUpdated: new Date().toISOString() });
 }
 
+/**
+ * 활성 서버 수만 가볍게 반환 — 랜딩 페이지 "N개 서버 준비됨" 표시용 (비로그인 공개)
+ * 캐시 친화적 (5분 캐시는 클라이언트에서 처리)
+ */
+export async function getServerCount(req: Request, res: Response): Promise<void> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM download_servers WHERE is_active = true`
+  );
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.json({ success: true, count: rows[0]?.count ?? 0 });
+}
+
 // 수동 새로고침 — 현재는 서버 목록만 반환 (모니터링 제거됨)
 export async function refreshServers(req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query(

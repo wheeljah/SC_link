@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Link } from 'react-router-dom';
-import ServerStatus from '../components/ServerStatus';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../context/AuthContext';
-import { getApiBaseURL, getBackendOrigin, initPromise } from '../services/api';
+import api, { getApiBaseURL, getBackendOrigin, initPromise } from '../services/api';
 
 // ── 인라인 라인 아이콘 (의존성 없음) ──
 type IconProps = { className?: string };
@@ -49,6 +48,7 @@ export default function Home() {
   const [reportSuccess, setReportSuccess] = useState(false);
   const [communityPreviews, setCommunityPreviews] = useState<{ id: number; title: string; response_count: number }[]>([]);
   const [communityTotal, setCommunityTotal] = useState(0);
+  const [serverCount, setServerCount] = useState<number | null>(null);
   const { isLoggedIn } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
@@ -64,6 +64,18 @@ export default function Home() {
         .then(r => r.json())
         .then(j => { if (j.success) { setCommunityPreviews(j.data); setCommunityTotal(j.total); } })
         .catch(() => {});
+    });
+  }, []);
+
+  // 준비된 검색 서버 수 (활성 서버만) — 2줄 소개에 표시
+  useEffect(() => {
+    initPromise.then(() => {
+      api.get('/servers/count')
+        .then(res => {
+          const n = Number(res.data?.count);
+          setServerCount(Number.isFinite(n) ? n : null);
+        })
+        .catch(() => setServerCount(null));
     });
   }, []);
 
@@ -410,6 +422,34 @@ export default function Home() {
           )}
         </form>
 
+        {/* ── 검색 서버 소개 (2줄) — 리스트는 어드민 페이지에서만 확인 가능 ── */}
+        <div className="text-center px-2 space-y-1">
+          <p className="text-xs text-slate-500 break-keep">
+            검색 요청 시, 자동으로 최적 서버를 선택합니다.
+          </p>
+          <p className="text-xs text-slate-400 break-keep">
+            {serverCount !== null ? `${serverCount}개 서버 준비됨` : '서버 준비 상태 확인 중...'}
+          </p>
+        </div>
+
+        {/* ── 🎓 커리어 신설 공고 (QR 위, 한 줄) — 클릭하면 커리어 탭으로 이동 ── */}
+        <Link
+          to="/jobs"
+          aria-label="커리어 검색 신설 - 클릭하면 커리어 탭으로 이동"
+          className="group flex items-center justify-between gap-3 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-2xl px-4 py-3 shadow-soft transition-all"
+        >
+          <span className="flex items-center gap-2.5 min-w-0">
+            <span className="text-lg shrink-0" aria-hidden>🎓</span>
+            <span className="text-sm font-bold truncate">
+              커리어 검색 신설 · 클릭하면 커리어 탭으로 →
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-white/20 group-hover:bg-white/30 px-2.5 py-1 rounded-lg shrink-0 transition-colors">
+            /jobs
+            <IconArrow className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </span>
+        </Link>
+
         {/* ── QR 코드 ── */}
         <div className="flex flex-col items-center gap-2 py-2">
           <QRCodeSVG
@@ -422,8 +462,6 @@ export default function Home() {
           />
           <p className="text-xs text-slate-400">모바일에서 바로 접속</p>
         </div>
-
-        <ServerStatus compact />
 
         {/* ── 커뮤니티 ── */}
         <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm hover:shadow-soft transition-shadow">
