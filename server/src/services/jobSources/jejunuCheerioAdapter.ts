@@ -13,6 +13,10 @@ import { sanitizePII } from './piiSanitizer';
 const LIST_URL = 'https://www.jejunu.ac.kr/ara/noticesurvey/recruit.htm';
 const BASE_URL = 'https://www.jejunu.ac.kr';
 
+// TLS: 제주대 인증서 검증 실패 대비 (Render Node.js CA 번들 차이)
+import https from 'https';
+const tlsAgent = new https.Agent({ rejectUnauthorized: false });
+
 export const jejunuCheerioAdapter: JobSourceAdapter = {
   code: 'jejunu-cheerio',
   region: 'kr',
@@ -21,6 +25,7 @@ export const jejunuCheerioAdapter: JobSourceAdapter = {
     const { data: html } = await axios.get<string>(LIST_URL, {
       timeout: 20000,
       responseType: 'text',
+      httpsAgent: tlsAgent,
       headers: {
         'User-Agent': 'ScholarLinkBot/1.0 (+https://wheeljah.github.io/SC_link)',
         'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',

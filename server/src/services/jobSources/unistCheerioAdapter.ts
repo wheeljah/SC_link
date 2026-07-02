@@ -11,8 +11,8 @@ import { JobSourceAdapter, RawJobItem } from './types';
 import { sanitizePII } from './piiSanitizer';
 
 const LIST_URL =
-  'http://www.unist.ac.kr/unist/etc/notification/employment.do?mode=list&article.offset=0';
-const BASE_URL = 'http://www.unist.ac.kr';
+  'https://www.unist.ac.kr/unist/etc/notification/employment.do?mode=list&article.offset=0';
+const BASE_URL = 'https://www.unist.ac.kr';
 
 export const unistCheerioAdapter: JobSourceAdapter = {
   code: 'unist-cheerio',
