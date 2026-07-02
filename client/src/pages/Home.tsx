@@ -214,9 +214,24 @@ export default function Home() {
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.15]">
             <span className="bg-gradient-to-r from-navy via-brand-700 to-brand-500 bg-clip-text text-transparent whitespace-pre-line break-keep">오픈액세스 논문 · 도서 통합 검색</span>
           </h1>
-          <p className="mt-4 text-slate-500 text-base sm:text-lg break-keep">
-            DOI · PubMed ID · arXiv ID · 저널 URL 입력으로 OA 논문과 학술 도서를 바로 검색합니다.
-          </p>
+
+          {/* 🎓 대학원/연구기관 모집공고 배너 (sub 히어로 자리) — 클릭 시 /jobs로 이동 */}
+          <Link
+            to="/jobs"
+            aria-label="대학원/연구기관 모집공고 보러 가기"
+            className="group mt-5 flex items-center justify-between gap-4 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-2xl px-5 py-4 sm:px-6 sm:py-5 shadow-soft transition-all"
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <span className="text-2xl sm:text-3xl shrink-0" aria-hidden>🎓</span>
+              <span className="text-base sm:text-lg font-bold leading-tight break-keep text-left">
+                대학원/연구기관 모집공고
+              </span>
+            </span>
+            <span aria-hidden className="shrink-0 group-hover:translate-x-1.5 transition-transform">
+              <IconArrow className="w-9 h-9 sm:w-10 sm:h-10" />
+            </span>
+          </Link>
+
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs">
             {['DOI', 'PMID', 'arXiv', '저널 URL'].map(t => (
               <span key={t} className="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 font-semibold border border-brand-100">
@@ -431,24 +446,6 @@ export default function Home() {
             {serverCount !== null ? `${serverCount}개 서버 준비됨` : '서버 준비 상태 확인 중...'}
           </p>
         </div>
-
-        {/* ── 🎓 커리어 신설 공고 (QR 위, 한 줄) — 클릭하면 커리어 탭으로 이동 ── */}
-        <Link
-          to="/jobs"
-          aria-label="커리어 검색 신설 - 클릭하면 커리어 탭으로 이동"
-          className="group flex items-center justify-between gap-3 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-2xl px-4 py-3 shadow-soft transition-all"
-        >
-          <span className="flex items-center gap-2.5 min-w-0">
-            <span className="text-lg shrink-0" aria-hidden>🎓</span>
-            <span className="text-sm font-bold truncate">
-              커리어 검색 신설 · 클릭하면 커리어 탭으로 →
-            </span>
-          </span>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-white/20 group-hover:bg-white/30 px-2.5 py-1 rounded-lg shrink-0 transition-colors">
-            /jobs
-            <IconArrow className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </span>
-        </Link>
 
         {/* ── QR 코드 ── */}
         <div className="flex flex-col items-center gap-2 py-2">
