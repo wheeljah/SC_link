@@ -409,7 +409,9 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
      ('ibs-cheerio',      'IBS 채용공고',           'https://www.ibs.re.kr/prog/recruit/kor/sub04_01/list.do', 'cheerio', '0 13,1 * * *', 'https://www.ibs.re.kr/robots.txt',  4000, 'kr', TRUE),
      ('yonsei-rnd-cheerio',     '연세대 산학협력단 채용',     'https://research.yonsei.ac.kr/research/service/recruit.do', 'cheerio', '0 14,2 * * *', NULL,                                  4000, 'kr', TRUE),
      ('yonsei-faculty-cheerio', '연세대 전임교원 초빙',     'https://faculty.yonsei.ac.kr/recruit/index.php?lang=ko', 'cheerio', '0 15,3 * * *', NULL,                                  4000, 'kr', TRUE),
-     ('worknet-openapi',        '워크넷 Open API (data.go.kr)', 'https://apis.data.go.kr/B552474/SmJobRecruitInfo/getSmJobRecruitList', 'openapi', '0 16,4 * * *', NULL,                              3000, 'kr', FALSE)
+     ('worknet-openapi',        '워크넷 Open API (data.go.kr)', 'https://apis.data.go.kr/B552474/SmJobRecruitInfo/getSmJobRecruitList', 'openapi', '0 16,4 * * *', NULL,                              3000, 'kr', FALSE),
+     ('kautm-recruit-cheerio',  'kautm.net 채용 미러 (산학협력단)', 'https://kautm.net/bbs/index.php?so_table=tlo_news&category=recruit', 'cheerio', '0 17,5 * * *', 'https://kautm.net/robots.txt',     5000, 'kr', TRUE),
+     ('saramin-openapi',        '사람인 Open API (oapi.saramin.co.kr)', 'https://oapi.saramin.co.kr/job-search', 'openapi', '0 18,6 * * *', NULL,                          3000, 'kr', FALSE)
    ON CONFLICT (code) DO NOTHING`, params: [] },
 
   // 🎓 커리어 — NRF 영구 제외 (2026-07-02: robots.txt Disallow: /)
