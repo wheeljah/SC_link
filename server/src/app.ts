@@ -24,6 +24,7 @@ import reportRoutes from './routes/reports';
 import adminRoutes from './routes/admin';
 import citationRoutes from './routes/citations';
 import jobsRoutes from './routes/jobs';
+import visitorStatsRoutes from './routes/visitorStats';
 import { initCrawlerCron } from './services/jobCrawlerService';
 
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/v1/ads', adRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/citations', citationRoutes);
 app.use('/api/v1/jobs', jobsRoutes);
+app.use('/api/v1', visitorStatsRoutes);
 app.use('/api/v1/admin',   adminRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

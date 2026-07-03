@@ -415,6 +415,108 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
   // 🎓 커리어 — NRF 영구 제외 (2026-07-02: robots.txt Disallow: /)
   // CREATE TABLE job_sources + INSERT 시드 뒤에 와야 안전 (이전 버전은 silent fail)
   { sql: `UPDATE job_sources SET enabled = FALSE, last_error = 'excluded: robots.txt Disallow: /' WHERE code = 'nrf-cheerio'`, params: [] },
+
+  // ── Visitor Stats 스키마 (2026-07-03) ──────────────────────────────────────
+  // GA-style 페이지뷰 추적 — 어드민 대시보드용
+  // 봇 자동 제외, IP는 SHA-256 16자리 해시만 저장 (GDPR 친화)
+  { sql: `
+    -- 1) page_views 테이블
+    CREATE TABLE IF NOT EXISTS page_views (
+      id           BIGSERIAL PRIMARY KEY,
+      path         TEXT NOT NULL,
+      referrer     TEXT,
+      user_agent   TEXT,
+      ip_hash      TEXT NOT NULL,
+      session_id   TEXT NOT NULL,
+      country      VARCHAR(2),
+      country_name TEXT,
+      region       TEXT,
+      city         TEXT,
+      device_type  VARCHAR(20),
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS page_views_created_at_idx ON page_views (created_at DESC);
+    CREATE INDEX IF NOT EXISTS page_views_path_idx      ON page_views (path);
+    CREATE INDEX IF NOT EXISTS page_views_session_idx   ON page_views (session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS page_views_country_idx   ON page_views (country);
+    CREATE INDEX IF NOT EXISTS page_views_region_idx    ON page_views (region);
+
+    -- 2) 통계 집계 RPC — 한 번의 호출로 모든 KPI 반환
+    CREATE OR REPLACE FUNCTION get_visitor_stats(
+      days_back        INT DEFAULT 30,
+      top_paths_limit  INT DEFAULT 20,
+      recent_limit     INT DEFAULT 30
+    ) RETURNS JSON LANGUAGE plpgsql AS $$
+    DECLARE
+      result JSON;
+      since_ts TIMESTAMPTZ := NOW() - (days_back || ' days')::INTERVAL;
+      since_day TIMESTAMPTZ := date_trunc('day', NOW());
+    BEGIN
+      SELECT json_build_object(
+        'totalViews',     (SELECT COUNT(*)::int FROM page_views WHERE created_at >= since_ts),
+        'uniqueSessions', (SELECT COUNT(DISTINCT session_id)::int FROM page_views WHERE created_at >= since_ts),
+        'todayViews',     (SELECT COUNT(*)::int FROM page_views WHERE created_at >= since_day),
+        'todayUnique',    (SELECT COUNT(DISTINCT session_id)::int FROM page_views WHERE created_at >= since_day),
+        'topPaths', COALESCE((
+          SELECT json_agg(row_to_json(p) ORDER BY p.views DESC)
+          FROM (
+            SELECT path, COUNT(*)::int AS views, COUNT(DISTINCT session_id)::int AS unique_visitors
+            FROM page_views WHERE created_at >= since_ts
+            GROUP BY path ORDER BY views DESC LIMIT top_paths_limit
+          ) p
+        ), '[]'::json),
+        'dailyTrend', COALESCE((
+          SELECT json_agg(row_to_json(d) ORDER BY d.day ASC)
+          FROM (
+            SELECT date_trunc('day', created_at) AS day,
+                   COUNT(*)::int AS views,
+                   COUNT(DISTINCT session_id)::int AS unique_visitors
+            FROM page_views WHERE created_at >= since_ts
+            GROUP BY date_trunc('day', created_at) ORDER BY day ASC
+          ) d
+        ), '[]'::json),
+        'recentViews', COALESCE((
+          SELECT json_agg(row_to_json(r))
+          FROM (
+            SELECT id, path, session_id, country, country_name, region, city, device_type, created_at
+            FROM page_views ORDER BY created_at DESC LIMIT recent_limit
+          ) r
+        ), '[]'::json),
+        'byCountry', COALESCE((
+          SELECT json_agg(row_to_json(c) ORDER BY c.views DESC)
+          FROM (
+            SELECT COALESCE(country, 'XX') AS country_code,
+                   MAX(country_name)        AS country_name,
+                   COUNT(*)::int            AS views,
+                   COUNT(DISTINCT session_id)::int AS unique_visitors
+            FROM page_views WHERE created_at >= since_ts
+            GROUP BY COALESCE(country, 'XX') ORDER BY views DESC
+          ) c
+        ), '[]'::json),
+        'byRegion', COALESCE((
+          SELECT json_agg(row_to_json(rg) ORDER BY rg.views DESC)
+          FROM (
+            SELECT COALESCE(region, 'Unknown') AS region,
+                   COUNT(*)::int            AS views,
+                   COUNT(DISTINCT session_id)::int AS unique_visitors
+            FROM page_views WHERE created_at >= since_ts AND country = 'KR'
+            GROUP BY COALESCE(region, 'Unknown') ORDER BY views DESC
+          ) rg
+        ), '[]'::json),
+        'byDevice', COALESCE((
+          SELECT json_agg(row_to_json(dv) ORDER BY dv.views DESC)
+          FROM (
+            SELECT COALESCE(device_type, 'unknown') AS device_type,
+                   COUNT(*)::int            AS views
+            FROM page_views WHERE created_at >= since_ts
+            GROUP BY COALESCE(device_type, 'unknown') ORDER BY views DESC
+          ) dv
+        ), '[]'::json)
+      ) INTO result;
+      RETURN result;
+    END;
+    $$;
+  `, params: [] },
 ];
 
 export async function migrate(): Promise<void> {

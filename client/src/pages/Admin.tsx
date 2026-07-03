@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiBaseURL, initPromise } from '../services/api';
 import UserStatsModal from '../components/UserStatsModal';
+import { VisitorStatsDashboard } from '../components/VisitorStatsDashboard';
 import { ADMIN_EMAIL, isAdminUser } from '../constants/auth';
 
 interface Stats {
@@ -57,7 +58,7 @@ export default function Admin() {
   const navigate = useNavigate();
   const isAdmin = isAdminUser(user);
 
-  const [tab, setTab] = useState<'users' | 'downloads'>('users');
+  const [tab, setTab] = useState<'users' | 'downloads' | 'visitors'>('users');
   const [stats, setStats] = useState<Stats | null>(null);
   const [allStats, setAllStats] = useState<AllStatsSummary | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -265,15 +266,23 @@ export default function Admin() {
       {/* Tabs */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="flex border-b border-slate-200">
-          {(['users', 'downloads'] as const).map(t => (
+          {(['users', 'downloads', 'visitors'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-6 py-3 text-sm font-semibold transition-colors ${
                 tab === t ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              {t === 'users' ? `가입자 (${userTotal.toLocaleString()})` : `다운로드 이력 (${dlTotal.toLocaleString()})`}
+              {t === 'users' ? `가입자 (${userTotal.toLocaleString()})` :
+               t === 'downloads' ? `다운로드 이력 (${dlTotal.toLocaleString()})` :
+               '방문자 통계'}
             </button>
           ))}
         </div>
+
+        {tab === 'visitors' && (
+          <div className="p-5">
+            <VisitorStatsDashboard />
+          </div>
+        )}
 
         <div className="p-4 space-y-3">
           {/* Action bar */}

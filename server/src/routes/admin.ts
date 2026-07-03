@@ -6,6 +6,7 @@ import {
   deleteOldDownloads, deleteUser, testConnectivity, testEmail,
   resendUnverified,
   getUserStatsById, getAllUserStatsSummary,
+  getVisitorStats,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -13,6 +14,7 @@ router.use(requireAuth);
 
 router.get('/stats',             getStats);
 router.get('/stats/all',         getAllUserStatsSummary);
+router.get('/stats/visitors',    getVisitorStats);
 router.get('/users',             listUsers);
 router.get('/users/:id/stats',   getUserStatsById);
 router.get('/downloads',         listDownloads);

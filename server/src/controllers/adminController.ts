@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import { sendMail, getEmailProviderStatus, sendVerificationEmail } from '../services/emailService';
 import { computeUserStats } from './userStatsController';
+import { VisitorTracker } from '../services/visitorStats/tracker';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'wheeljah@gmail.com';
 
@@ -331,5 +332,24 @@ export async function getAllUserStatsSummary(req: AuthRequest, res: Response): P
   } catch (err) {
     console.error('[admin/all-stats] error:', err);
     res.status(500).json({ success: false, message: '전체 통계 조회 실패' });
+  }
+}
+
+// ── 방문자 통계 (visitor-stats) — admin 전용 ─────────────────────────────────
+
+/**
+ * 방문자 통계 조회
+ * GET /api/v1/admin/visitor-stats?days=30
+ */
+export async function getVisitorStats(req: AuthRequest, res: Response): Promise<void> {
+  if (!guard(req, res)) return;
+  const days = Math.min(365, Math.max(1, parseInt(req.query.days as string) || 30));
+  try {
+    const tracker = new VisitorTracker({ daysBack: days });
+    const stats = await tracker.getStats(days);
+    res.json({ success: true, data: stats, days });
+  } catch (err) {
+    console.error('[admin/visitor-stats] error:', err);
+    res.status(500).json({ success: false, message: '방문자 통계 조회 실패' });
   }
 }

@@ -20,6 +20,7 @@ import Profile from './pages/Profile';
 import CitationNetworkPage from './pages/CitationNetworkPage';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
+import { PageViewTracker } from './components/PageViewTracker';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { isAdminUser } from './constants/auth';
 
@@ -36,6 +37,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function Layout() {
   return (
     <>
+      <PageViewTracker />
       <TopAdBanner />
       <Navbar />
       <CopyProtection />
