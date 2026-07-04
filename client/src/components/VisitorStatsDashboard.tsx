@@ -310,10 +310,12 @@ function Empty({ text }: { text: string }) {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+  // 집계는 KST 기준 자정으로 묶여 있으므로 라벨도 KST로 명시
+  return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' });
 }
 
 function fmtTime(iso: string) {
+  // recentViews의 created_at은 timestamptz(UTC) — 사용자가 보는 시점 TZ 기준으로 표기
   return new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 

@@ -444,6 +444,9 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
     CREATE INDEX IF NOT EXISTS page_views_region_idx    ON page_views (region);
 
     -- 2) 통계 집계 RPC — 한 번의 호출로 모든 KPI 반환
+    --    모든 집계는 Asia/Seoul(KST) 기준 자정으로 자름
+    --    (created_at AT TIME ZONE 'Asia/Seoul') → naive timestamp (KST)
+    --    ... AT TIME ZONE 'Asia/Seoul' → timestamptz (UTC 기준 KST 자정)
     CREATE OR REPLACE FUNCTION get_visitor_stats(
       days_back        INT DEFAULT 30,
       top_paths_limit  INT DEFAULT 20,
@@ -452,7 +455,7 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
     DECLARE
       result JSON;
       since_ts TIMESTAMPTZ := NOW() - (days_back || ' days')::INTERVAL;
-      since_day TIMESTAMPTZ := date_trunc('day', NOW());
+      since_day TIMESTAMPTZ := (date_trunc('day', (NOW() AT TIME ZONE 'Asia/Seoul'))) AT TIME ZONE 'Asia/Seoul';
     BEGIN
       SELECT json_build_object(
         'totalViews',     (SELECT COUNT(*)::int FROM page_views WHERE created_at >= since_ts),
@@ -470,11 +473,11 @@ const RUNTIME_UPDATES: { sql: string; params: (string | boolean)[] }[] = [
         'dailyTrend', COALESCE((
           SELECT json_agg(row_to_json(d) ORDER BY d.day ASC)
           FROM (
-            SELECT date_trunc('day', created_at) AS day,
+            SELECT (date_trunc('day', (created_at AT TIME ZONE 'Asia/Seoul'))) AT TIME ZONE 'Asia/Seoul' AS day,
                    COUNT(*)::int AS views,
                    COUNT(DISTINCT session_id)::int AS unique_visitors
             FROM page_views WHERE created_at >= since_ts
-            GROUP BY date_trunc('day', created_at) ORDER BY day ASC
+            GROUP BY date_trunc('day', (created_at AT TIME ZONE 'Asia/Seoul')) ORDER BY 1 ASC
           ) d
         ), '[]'::json),
         'recentViews', COALESCE((
