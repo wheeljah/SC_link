@@ -143,13 +143,18 @@ export function VisitorStatsDashboard() {
               const x = i * (barWidth + 4) + 2;
               const h = (d.views / maxViews) * chartH;
               const y = chartH - h;
+              // 숫자 라벨 위치: bar가 충분히 크면 안쪽 하단(흰색), 아니면 bar 위(짙은 회색)
+              // — bar 꼭대기가 viewBox(0~chartH) 위쪽으로 벗어나서 잘리는 문제 방지
+              const numInside = h >= 14;
+              const numY = numInside ? y + h - 4 : y - 4;
+              const numColor = numInside ? '#FFFFFF' : '#374151';
               return (
                 <g key={i}>
                   <rect x={x} y={y} width={barWidth} height={h} fill="#14b8a6" rx="2" />
                   <text x={x + barWidth / 2} y={chartH + 15} textAnchor="middle" fontSize="10" fill="#6B7280">
                     {fmtDate(d.day)}
                   </text>
-                  <text x={x + barWidth / 2} y={y - 4} textAnchor="middle" fontSize="10" fill="#374151" fontWeight="600">
+                  <text x={x + barWidth / 2} y={numY} textAnchor="middle" fontSize="10" fill={numColor} fontWeight="600">
                     {d.views}
                   </text>
                 </g>
