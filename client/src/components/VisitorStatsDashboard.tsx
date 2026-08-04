@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getApiBaseURL } from '../services/api';
+import { getApiBaseURL, initPromise } from '../services/api';
 
 export interface VisitorStats {
   totalViews: number;
@@ -58,25 +58,45 @@ export function VisitorStatsDashboard() {
     setLoading(true);
     setError(null);
 
-    const api = getApiBaseURL();
-    fetch(`${api}/admin/stats/visitors?days=${days}`, { headers: authHeadersOnly() })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(j => {
+    let active = true;
+    (async () => {
+      // 다른 admin 호출들과 동일하게 initPromise를 먼저 대기
+      // (getApiBaseURL이 fallback '/api/v1'을 반환해서 GitHub Pages에 잘못 요청하는 race condition 방지)
+      await initPromise;
+      if (!active) return;
+      const api = getApiBaseURL();
+      try {
+        const r = await fetch(`${api}/admin/stats/visitors?days=${days}`, { headers: authHeadersOnly() });
         if (cancelled) return;
-        if (j.success) setStats(j.data);
-        else throw new Error(j.message ?? '통계 조회 실패');
-        setLoading(false);
-      })
-      .catch((err) => {
+        if (!r.ok) {
+          // 서버가 보내는 구체적 메시지(인증 필요/유효하지 않은 토큰 등)를 우선 사용
+          let serverMsg = '';
+          try {
+            const j = await r.json();
+            serverMsg = j?.message ?? '';
+          } catch { /* JSON 파싱 실패는 무시 */ }
+          throw new Error(serverMsg || `HTTP ${r.status}`);
+        }
+        const j = await r.json();
         if (cancelled) return;
-        setError(String(err?.message ?? err));
-        setLoading(false);
-      });
+        if (j.success) {
+          setStats(j.data);
+          setError(null);
+        } else {
+          throw new Error(j.message ?? '통계 조회 실패');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setError(String((err as Error)?.message ?? err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      active = false;
+    };
   }, [days]);
 
   if (loading) {
