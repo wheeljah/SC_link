@@ -28,7 +28,7 @@ async function recordVisit(): Promise<number> {
 }
 
 export default function VisitorCounter() {
-  const [value, setValue] = useState(INITIAL_VALUE);
+  const [value, setValue] = useState<number | null>(null);
 
   useEffect(() => {
     const alreadyCounted = sessionStorage.getItem(SESSION_KEY) === 'true';
@@ -44,5 +44,5 @@ export default function VisitorCounter() {
     request.then(setValue).catch(() => setValue(INITIAL_VALUE));
   }, []);
 
-  return <>{value.toLocaleString()}</>;
+  return <>{value?.toLocaleString() ?? '...'}</>;
 }
