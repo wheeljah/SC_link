@@ -38,9 +38,11 @@ export default function Home() {
           DOI, PMID, arXiv ID 또는 논문 제목으로 공식 메타데이터와 공개 원문 위치를 찾습니다.
           회원가입 없이 이용할 수 있습니다.
         </p>
-        <p className="mt-5 text-sm font-medium text-slate-600">
-          통합 논문 소스 <strong className="ml-1 text-base text-slate-900">{INTEGRATED_SOURCE_COUNT.toLocaleString()}개</strong>
-        </p>
+        <div className="mt-6 inline-flex items-center gap-3 border-y border-slate-200 py-3 text-left">
+          <span className="text-xs font-semibold uppercase text-slate-500">Integrated Sources</span>
+          <strong className="text-2xl leading-none text-brand-700">{INTEGRATED_SOURCE_COUNT.toLocaleString()}개</strong>
+          <span className="text-sm text-slate-600">통합 논문 소스</span>
+        </div>
       </section>
 
       <form onSubmit={onSearch} className="mt-10 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
