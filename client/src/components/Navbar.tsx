@@ -1,61 +1,17 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { isAdminUser } from '../constants/auth';
-import LangToggle from './LangToggle';
+import { Link } from 'react-router-dom';
 
 export default function Navbar() {
-  const { user, isLoggedIn, logout } = useAuth();
-  const isAdmin = isAdminUser(user);
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
-  const link = 'text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0';
-
   return (
-    <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-        <Link to="/" className="flex items-center gap-2 font-bold text-xl text-slate-900 shrink-0">
-          <span className="text-2xl">🔬</span>
+    <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
+        <Link to="/" className="flex shrink-0 items-center gap-2 text-xl font-bold text-slate-900">
+          <span aria-hidden="true">🔬</span>
           <span>ScholarLink</span>
         </Link>
-
-        {/* 모바일에서도 모든 항목 노출 — 넘치면 가로 스크롤 */}
-        <div className="flex items-center gap-4 text-sm overflow-x-auto scrollbar-hide min-w-0">
-          <LangToggle />
-
-          {isAdmin && <Link to="/servers" className={link}>서버 상태</Link>}
-          <Link to="/community" className={link}>커뮤니티</Link>
-          <Link to="/jobs" className={link}>🎓 커리어</Link>
-          <Link to="/report" className={link}>에러 보고</Link>
-
-          {isLoggedIn ? (
-            <div className="flex items-center gap-3 shrink-0">
-              <Link to="/profile" className={link}>계정정보</Link>
-              <Link to="/history" className={link}>이력</Link>
-              {isAdmin && (
-                <Link to="/admin" className="text-purple-600 hover:text-purple-800 font-semibold transition-colors whitespace-nowrap shrink-0">
-                  어드민
-                </Link>
-              )}
-              <button onClick={handleLogout} className="text-slate-500 hover:text-red-600 transition-colors whitespace-nowrap shrink-0">
-                로그아웃
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 shrink-0">
-              <Link to="/login" className={link}>로그인</Link>
-              <Link
-                to="/register"
-                className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
-              >
-                회원가입
-              </Link>
-            </div>
-          )}
+        <div className="flex min-w-0 items-center gap-4 overflow-x-auto text-sm text-slate-600 scrollbar-hide">
+          <a className="shrink-0 hover:text-brand-700" href="#search">논문 찾기</a>
+          <a className="shrink-0 hover:text-brand-700" href="#sources">검색 소스</a>
+          <a className="shrink-0 hover:text-brand-700" href="#guide">이용 안내</a>
         </div>
       </div>
     </nav>

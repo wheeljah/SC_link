@@ -1,22 +1,15 @@
 import { useEffect, useRef } from 'react';
 import bidvibeLogo from '../../assets/bidvibe-logo.svg';
-import { getLang } from '../../i18n/translate';
 
 const CTA_U    = 'https://ai-traffic.kr';
-const MSG_KO   = (
+const MESSAGE   = (
   <>
     연구자 비용 0원,<br className="sm:hidden" /> 엑셀로 공급사 그만 찾기
   </>
 );
-const MSG_EN   = 'Researchers private. Quotes public. Suppliers confidential.';
-const CTA_KO   = '지금 등록 →';
-const CTA_EN   = 'Sign up now →';
-const LABEL_KO = '광고';
-const LABEL_EN = 'Ad';
 
 export default function TopAdBanner() {
   const ref = useRef<HTMLAnchorElement>(null);
-  const isEn = getLang() === 'en';
 
   useEffect(() => {
     const el = ref.current;
@@ -60,7 +53,7 @@ export default function TopAdBanner() {
         className="text-[10px] font-bold rounded px-1.5 py-0.5 leading-tight shrink-0"
         style={{ border: '1px solid rgba(26,172,218,0.5)', color: '#0E7490' }}
       >
-        {isEn ? LABEL_EN : LABEL_KO}
+        광고
       </span>
 
       {/* 메시지 — 모바일은 2줄, 데스크탑은 1줄. truncate 제거하고 wrap 허용 */}
@@ -68,7 +61,7 @@ export default function TopAdBanner() {
         className="font-semibold break-keep whitespace-normal flex-1 min-w-0 leading-tight"
         style={{ color: '#132B43', fontSize: 'clamp(0.7rem, 2.8vw, 0.9375rem)' }}
       >
-        {isEn ? MSG_EN : MSG_KO}
+        {MESSAGE}
       </span>
 
       {/* CTA */}
@@ -76,7 +69,7 @@ export default function TopAdBanner() {
         className="font-bold whitespace-nowrap shrink-0"
         style={{ color: '#0E7490', fontSize: 'clamp(0.7rem, 2.8vw, 0.9375rem)' }}
       >
-        {isEn ? CTA_EN : CTA_KO}
+        지금 등록 →
       </span>
     </a>
   );

@@ -1,95 +1,21 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import TopAdBanner from './components/ads/TopAdBanner';
 import BottomAdBanner from './components/ads/BottomAdBanner';
-import CopyProtection from './components/CopyProtection';
 import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
-import ResetPassword from './pages/ResetPassword';
-import Servers from './pages/Servers';
-import Community from './pages/Community';
-import CommunityNew from './pages/CommunityNew';
-import CommunityDetail from './pages/CommunityDetail';
-import History from './pages/History';
-import BugReport from './pages/BugReport';
-import Admin from './pages/Admin';
-import Profile from './pages/Profile';
-import CitationNetworkPage from './pages/CitationNetworkPage';
-import Jobs from './pages/Jobs';
-import JobDetail from './pages/JobDetail';
-import { PageViewTracker } from './components/PageViewTracker';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { isAdminUser } from './constants/auth';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn } = useAuth();
-  return isLoggedIn ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  return isAdminUser(user) ? <>{children}</> : <Navigate to="/" replace />;
-}
-
-function Layout() {
+export default function App() {
   return (
     <>
-      <PageViewTracker />
       <TopAdBanner />
       <Navbar />
-      <CopyProtection />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/forgot-password" element={<ResetPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/servers" element={<AdminRoute><Servers /></AdminRoute>} />
-          <Route path="/community" element={<Community />} />
-          <Route path="/community/:id" element={<CommunityDetail />} />
-          <Route path="/jobs" element={<Jobs />} />
-          <Route path="/jobs/:id" element={<JobDetail />} />
-          <Route path="/community/new" element={
-            <PrivateRoute><CommunityNew /></PrivateRoute>
-          } />
-          <Route path="/history" element={
-            <PrivateRoute><History /></PrivateRoute>
-          } />
-          <Route path="/report" element={<BugReport />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/profile" element={
-            <PrivateRoute><Profile /></PrivateRoute>
-          } />
-          <Route path="/network" element={<CitationNetworkPage />} />
-          <Route path="/network/:doi" element={<CitationNetworkPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <BottomAdBanner />
     </>
-  );
-}
-
-export default function App() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000,
-        refetchOnWindowFocus: false,
-        retry: 1,
-      },
-    },
-  });
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Layout />
-      </AuthProvider>
-    </QueryClientProvider>
   );
 }
