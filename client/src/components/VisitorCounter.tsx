@@ -9,8 +9,19 @@ interface CounterResponse {
   value?: number;
 }
 
+function counterUrl(operation: 'get' | 'hit'): string {
+  return `${COUNTER_API}/${operation}/${COUNTER_KEY}?_=${Date.now()}`;
+}
+
 async function readCounter(): Promise<number> {
-  const response = await fetch(`${COUNTER_API}/get/${COUNTER_KEY}`);
+  const response = await fetch(counterUrl('get'), { cache: 'no-store' });
+  if (!response.ok) throw new Error('counter unavailable');
+  const data = await response.json() as CounterResponse;
+  return typeof data.value === 'number' ? data.value : INITIAL_VALUE;
+}
+
+async function recordVisit(): Promise<number> {
+  const response = await fetch(counterUrl('hit'), { cache: 'no-store' });
   if (!response.ok) throw new Error('counter unavailable');
   const data = await response.json() as CounterResponse;
   return typeof data.value === 'number' ? data.value : INITIAL_VALUE;
@@ -23,13 +34,12 @@ export default function VisitorCounter() {
     const alreadyCounted = sessionStorage.getItem(SESSION_KEY) === 'true';
     const request = alreadyCounted
       ? readCounter()
-      : fetch(`${COUNTER_API}/hit/${COUNTER_KEY}`)
-        .then(async response => {
-          if (!response.ok) throw new Error('counter unavailable');
+      : recordVisit()
+        .then(value => {
           sessionStorage.setItem(SESSION_KEY, 'true');
-          const data = await response.json() as CounterResponse;
-          return typeof data.value === 'number' ? data.value : INITIAL_VALUE;
-        });
+          return value;
+        })
+        .catch(readCounter);
 
     request.then(setValue).catch(() => setValue(INITIAL_VALUE));
   }, []);
