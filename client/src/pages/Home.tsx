@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { PaperRecord, searchOpenAccessPaper } from '../services/oaSearch';
 
 const EXAMPLES = ['10.1038/nature12373', 'PMID: 29988009', 'arXiv:1706.03762', 'Attention is all you need'];
+const INTEGRATED_SOURCE_COUNT = 191;
 
 function DetailRow({ label, value }: { label: string; value?: string | number }) {
   if (!value) return null;
@@ -37,6 +38,9 @@ export default function Home() {
           DOI, PMID, arXiv ID 또는 논문 제목으로 공식 메타데이터와 공개 원문 위치를 찾습니다.
           회원가입 없이 이용할 수 있습니다.
         </p>
+        <p className="mt-5 text-sm font-medium text-slate-600">
+          통합 논문 소스 <strong className="ml-1 text-base text-slate-900">{INTEGRATED_SOURCE_COUNT.toLocaleString()}개</strong>
+        </p>
       </section>
 
       <form onSubmit={onSearch} className="mt-10 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -66,11 +70,11 @@ export default function Home() {
           </div>
           {paper.abstract && <p className="mt-4 border-l-2 border-brand-400 pl-3 text-sm leading-6 text-slate-600">{paper.abstract}</p>}
           <div className="mt-6 flex flex-wrap gap-3">
-            {paper.openAccessUrl ? (
-              <a href={paper.openAccessUrl} target="_blank" rel="noreferrer" className="rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
-                {paper.openAccessSource ? `${paper.openAccessSource}에서 원문 열기` : '공개 원문 열기'}
+            {paper.openAccessLinks.length ? paper.openAccessLinks.map(link => (
+              <a key={`${link.source}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                {link.source}에서 원문 열기
               </a>
-            ) : <span className="rounded-md bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">확인 가능한 공개 PDF 위치가 없습니다.</span>}
+            )) : <span className="rounded-md bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">확인 가능한 공개 PDF 위치가 없습니다.</span>}
             <a href={paper.landingUrl} target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-500">공식 논문 페이지</a>
           </div>
         </article>
@@ -79,8 +83,8 @@ export default function Home() {
       <section id="sources" className="mt-14 grid gap-4 sm:grid-cols-3">
         {[
           ['Crossref', 'DOI와 학술 메타데이터를 검색합니다.'],
-          ['OpenAlex', '공개 원문 위치를 추가로 확인합니다.'],
-          ['PubMed · arXiv', '의생명·프리프린트 공개 원문을 연결합니다.'],
+          ['OpenAlex · Semantic Scholar', '여러 공개 원문 위치를 병렬로 확인합니다.'],
+          ['PubMed · Europe PMC · arXiv', '의생명·프리프린트 공개 원문을 연결합니다.'],
         ].map(([name, description]) => <article key={name} className="rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-bold text-slate-900">{name}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{description}</p></article>)}
       </section>
 
