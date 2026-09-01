@@ -1,9 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { PaperRecord, searchOpenAccessPaper } from '../services/oaSearch';
+import VisitorCounter from '../components/VisitorCounter';
 
 const EXAMPLES = ['10.1038/nature12373', 'PMID: 29988009', 'arXiv:1706.03762', 'Attention is all you need'];
 const INTEGRATED_SOURCE_COUNT = 191;
-const HISTORICAL_VISITOR_COUNT = 4;
 
 function DetailRow({ label, value }: { label: string; value?: string | number }) {
   if (!value) return null;
@@ -47,7 +47,7 @@ export default function Home() {
           </div>
           <div className="px-4 py-3">
             <span className="block text-xs font-semibold uppercase text-slate-500">Total Visits</span>
-            <strong className="mt-1 block text-2xl leading-none text-slate-900">{HISTORICAL_VISITOR_COUNT.toLocaleString()}</strong>
+            <strong className="mt-1 block text-2xl leading-none text-slate-900"><VisitorCounter /></strong>
             <span className="mt-1 block text-sm text-slate-600">누적 방문</span>
           </div>
         </div>
