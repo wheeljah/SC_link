@@ -3,6 +3,7 @@ import { PaperRecord, searchOpenAccessPaper } from '../services/oaSearch';
 
 const EXAMPLES = ['10.1038/nature12373', 'PMID: 29988009', 'arXiv:1706.03762', 'Attention is all you need'];
 const INTEGRATED_SOURCE_COUNT = 191;
+const HISTORICAL_VISITOR_COUNT = 4;
 
 function DetailRow({ label, value }: { label: string; value?: string | number }) {
   if (!value) return null;
@@ -38,10 +39,17 @@ export default function Home() {
           DOI, PMID, arXiv ID 또는 논문 제목으로 공식 메타데이터와 공개 원문 위치를 찾습니다.
           회원가입 없이 이용할 수 있습니다.
         </p>
-        <div className="mt-6 inline-flex items-center gap-3 border-y border-slate-200 py-3 text-left">
-          <span className="text-xs font-semibold uppercase text-slate-500">Integrated Sources</span>
-          <strong className="text-2xl leading-none text-brand-700">{INTEGRATED_SOURCE_COUNT.toLocaleString()}개</strong>
-          <span className="text-sm text-slate-600">통합 논문 소스</span>
+        <div className="mt-6 inline-flex divide-x divide-slate-200 border-y border-slate-200 text-left">
+          <div className="px-4 py-3">
+            <span className="block text-xs font-semibold uppercase text-slate-500">Integrated Sources</span>
+            <strong className="mt-1 block text-2xl leading-none text-brand-700">{INTEGRATED_SOURCE_COUNT.toLocaleString()}개</strong>
+            <span className="mt-1 block text-sm text-slate-600">통합 논문 소스</span>
+          </div>
+          <div className="px-4 py-3">
+            <span className="block text-xs font-semibold uppercase text-slate-500">Total Visits</span>
+            <strong className="mt-1 block text-2xl leading-none text-slate-900">{HISTORICAL_VISITOR_COUNT.toLocaleString()}</strong>
+            <span className="mt-1 block text-sm text-slate-600">누적 방문</span>
+          </div>
         </div>
       </section>
 
